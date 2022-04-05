@@ -2,6 +2,7 @@ const {expectRevert} = require('@openzeppelin/test-helpers');
 
 const DeliveryCoordinator = artifacts.require("./DeliveryCoordinator.sol");
 const DeliveryNode = artifacts.require("./DeliveryNode.sol");
+const PackageToken = artifacts.require("./PackageToken.sol");
 
 contract("DeliveryCoordinator", accounts => {
 
@@ -11,7 +12,7 @@ contract("DeliveryCoordinator", accounts => {
     await expectRevert(deliveryCoordinatorInstance.addDeliveryNode("Testville", { from: accounts[1] }), "Ownable: caller is not the owner");
   });
 
-  it("should deploy additional delivery nodes", async () => {
+  it("should successfully deploy additional delivery nodes", async () => {
     const testNodeOneName = "Testville";
     const testNodeTwoName = "Test City";
 
@@ -28,6 +29,24 @@ contract("DeliveryCoordinator", accounts => {
 
     assert.equal(testNodeTwoName, await secondInitialisedNode.name.call(), "The node was not initialised with the correct name.");
     assert.equal(DeliveryNode.NodeStatus.ONLINE, await secondInitialisedNode.status.call(), "The node was not initialised with the correct status.");
+  });
+
+  it("should correctly issue a package token", async () => {
+    const packageContents = "Box of test stuff";
+    const packageWeight = "10kg";
+
+    const deliveryCoordinatorInstance = await DeliveryCoordinator.deployed();
+    const packageTokenInstance = await PackageToken.deployed();
+
+    await deliveryCoordinatorInstance.createPackage(packageContents, packageWeight, { from: accounts[0] });
+
+    assert.equal(1, await packageTokenInstance.balanceOf.call(accounts[0]), "The specified account does not own the correct amount of package tokens.");
+    assert.equal(accounts[0], await packageTokenInstance.ownerOf.call(1), "The specified account does not own the newly minted package token.");
+
+    const packageTokenData = await packageTokenInstance.packageData.call(1);
+
+    assert.equal(packageContents, packageTokenData[0], "The package token was not initialised with the correct description.");
+    assert.equal(packageWeight, packageTokenData[1], "The package token was not initialised with the correct weight.");
   });
 
 });

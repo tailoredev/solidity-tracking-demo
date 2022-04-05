@@ -9,5 +9,5 @@ module.exports = async function(deployer) {
   await deployer.deploy(PackageToken);
   await deployer.deploy(ReceiptToken);
 
-  deployer.deploy(DeliveryCoordinator, PackageToken.address, ReceiptToken.address);
+  await deployer.deploy(DeliveryCoordinator, PackageToken.address, ReceiptToken.address); 
 };
