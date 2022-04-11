@@ -19,11 +19,11 @@ contract DeliveryCoordinator is ERC721Holder, Ownable {
     receiptTokenAddress = _receiptTokenAddress;
   }
 
-  function addDeliveryNode(string memory _nodeName) public onlyOwner {
-    deliveryNodes.push(new DeliveryNode(_nodeName, DeliveryNode.NodeStatus.ONLINE));
+  function addDeliveryNode(string memory _nodeName) external onlyOwner {
+    deliveryNodes.push(new DeliveryNode(_nodeName, DeliveryNode.NodeStatus.ONLINE, packageTokenAddress, receiptTokenAddress));
   }
 
-  function createPackage(string memory _packageContents, string memory _packageWeight) public {
+  function createPackage(string memory _packageContents, string memory _packageWeight) external {
     PackageToken deployedTokenContract = PackageToken(packageTokenAddress);
     deployedTokenContract.createPackage(msg.sender, _packageContents, _packageWeight);
   }
