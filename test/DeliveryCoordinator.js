@@ -7,6 +7,8 @@ const ReceiptToken = artifacts.require("./ReceiptToken.sol");
 
 contract("DeliveryCoordinator", accounts => {
 
+  const zeroAddress = '0x0000000000000000000000000000000000000000';
+
   it("should not allow non-owner addresses to add nodes", async () => {
     const deliveryCoordinatorInstance = await DeliveryCoordinator.deployed();
 
@@ -39,26 +41,105 @@ contract("DeliveryCoordinator", accounts => {
     const deliveryCoordinatorInstance = await DeliveryCoordinator.deployed();
     const packageTokenInstance = await PackageToken.deployed();
 
-    // TODO - Get the token id as returned from this call
+    const packageTokenId = await deliveryCoordinatorInstance.createPackage.call(packageContents, packageWeight, { from: accounts[0] });
     await deliveryCoordinatorInstance.createPackage(packageContents, packageWeight, { from: accounts[0] });
 
-    assert.equal(1, await packageTokenInstance.balanceOf.call(accounts[0]), "The specified account does not own the correct amount of package tokens.");
-    assert.equal(accounts[0], await packageTokenInstance.ownerOf.call(1), "The specified account does not own the newly minted package token.");
+    assert.equal(accounts[0], await packageTokenInstance.ownerOf.call(packageTokenId), "The specified account does not own the newly minted package token.");
 
-    const packageTokenData = await packageTokenInstance.packageData.call(1);
+    const packageTokenData = await packageTokenInstance.packageData.call(packageTokenId);
 
     assert.equal(packageContents, packageTokenData[0], "The package token was not initialised with the correct description.");
     assert.equal(packageWeight, packageTokenData[1], "The package token was not initialised with the correct weight.");
+  });
+
+  it("should not forward packages to unknown addresses", async () => {
+    const deliveryCoordinatorInstance = await DeliveryCoordinator.deployed();
+
+    await expectRevert(deliveryCoordinatorInstance.forwardPackage(accounts[1], 0, { from: accounts[0] }), "The provided destination address is not that of a known delivery node");
+  });
+
+  it("should not interact with packages that are not owned by either the delivery coordinator or a known delivery node", async () => {
+    const testNodeName = "Testville";
+    const packageContents = "Box of test stuff";
+    const packageWeight = "10kg";
+
+    const deliveryCoordinatorInstance = await DeliveryCoordinator.deployed();
+    const packageTokenInstance = await PackageToken.deployed();
+
+    await deliveryCoordinatorInstance.addDeliveryNode(testNodeName, { from: accounts[0] });
+    const deliveryNode = await DeliveryNode.at(await deliveryCoordinatorInstance.deliveryNodes.call(0));
+
+    const packageTokenId = await deliveryCoordinatorInstance.createPackage.call(packageContents, packageWeight, { from: accounts[0] });
+    await deliveryCoordinatorInstance.createPackage(packageContents, packageWeight, { from: accounts[0] });
+
+    assert.equal(accounts[0], await packageTokenInstance.ownerOf.call(packageTokenId), "The specified account does not own the newly minted package token.");
+
+    await expectRevert(deliveryCoordinatorInstance.forwardPackage(deliveryNode.address, packageTokenId, { from: accounts[0] }),
+      "The package token is neither held by the delivery coordinator, nor a known delivery node");
+  });
+
+  it("should forward packages from the delivery coordinator", async () => {
+    const testNodeName = "Testville";
+    const packageContents = "Box of test stuff";
+    const packageWeight = "10kg";
+
+    const deliveryCoordinatorInstance = await DeliveryCoordinator.deployed();
+    const packageTokenInstance = await PackageToken.deployed();
+
+    await deliveryCoordinatorInstance.addDeliveryNode(testNodeName, { from: accounts[0] });
+    const deliveryNode = await DeliveryNode.at(await deliveryCoordinatorInstance.deliveryNodes.call(0));
+
+    const packageTokenId = await deliveryCoordinatorInstance.createPackage.call(packageContents, packageWeight, { from: accounts[0] });
+    await deliveryCoordinatorInstance.createPackage(packageContents, packageWeight, { from: accounts[0] });
+
+    assert.equal(accounts[0], await packageTokenInstance.ownerOf.call(packageTokenId), "The specified account does not own the newly minted package token.");
+
+    await packageTokenInstance.safeTransferFrom(accounts[0], deliveryCoordinatorInstance.address, packageTokenId);
+
+    assert.equal(deliveryCoordinatorInstance.address, await packageTokenInstance.ownerOf.call(packageTokenId), "The delivery coordinator does not own the recently transferred package token.");
+
+    await deliveryCoordinatorInstance.forwardPackage(deliveryNode.address, packageTokenId), { from: accounts[0] };
+
+    assert.equal(deliveryNode.address, await packageTokenInstance.ownerOf.call(packageTokenId), "The delivery node does not own the recently forwarded package token.");
+  });
+
+  it("should forward packages between delivery nodes", async () => {
+    const testNodeOneName = "Testville";
+    const testNodeTwoName = "Test City";
+    const packageContents = "Box of test stuff";
+    const packageWeight = "10kg";
+
+    const deliveryCoordinatorInstance = await DeliveryCoordinator.deployed();
+    const packageTokenInstance = await PackageToken.deployed();
+
+    await deliveryCoordinatorInstance.addDeliveryNode(testNodeOneName, { from: accounts[0] });
+    await deliveryCoordinatorInstance.addDeliveryNode(testNodeTwoName, { from: accounts[0] });
+
+    const firstInitialisedNode = await DeliveryNode.at(await deliveryCoordinatorInstance.deliveryNodes.call(0));
+    const secondInitialisedNode = await DeliveryNode.at(await deliveryCoordinatorInstance.deliveryNodes.call(1));
+
+    const packageTokenId = await deliveryCoordinatorInstance.createPackage.call(packageContents, packageWeight, { from: accounts[0] });
+    await deliveryCoordinatorInstance.createPackage(packageContents, packageWeight, { from: accounts[0] });
+
+    assert.equal(accounts[0], await packageTokenInstance.ownerOf.call(packageTokenId), "The specified account does not own the newly minted package token.");
+
+    await packageTokenInstance.safeTransferFrom(accounts[0], firstInitialisedNode.address, packageTokenId);
+
+    assert.equal(firstInitialisedNode.address, await packageTokenInstance.ownerOf.call(packageTokenId), "The first delivery node does not own the recently forwarded package token.");
+
+    await deliveryCoordinatorInstance.forwardPackage(secondInitialisedNode.address, packageTokenId), { from: accounts[0] };
+
+    assert.equal(secondInitialisedNode.address, await packageTokenInstance.ownerOf.call(packageTokenId), "The second delivery node does not own the recently forwarded package token.");
   });
 
   it("should not accept unknown ERC721 tokens", async () => {
     const deliveryCoordinatorInstance = await DeliveryCoordinator.deployed();
     const dummyERC721 = await PackageToken.new({ from: accounts[0] });
 
-    // TODO - Get the token id as returned from these calls
+    const packageTokenId = await dummyERC721.createPackage.call(accounts[0], "test", "test");
     await dummyERC721.createPackage(accounts[0], "test", "test");
 
-    await expectRevert(dummyERC721.safeTransferFrom(accounts[0], deliveryCoordinatorInstance.address, 1), "ERC721 received is not from known token address");
+    await expectRevert(dummyERC721.safeTransferFrom(accounts[0], deliveryCoordinatorInstance.address, packageTokenId), "ERC721 received is not from known token address");
   });
 
   it("should correctly issue a receipt token", async () => {
@@ -69,19 +150,77 @@ contract("DeliveryCoordinator", accounts => {
     const packageTokenInstance = await PackageToken.deployed();
     const receiptTokenInstance = await ReceiptToken.deployed();
 
-    // TODO - Get the token id as returned from these calls
+    const packageTokenId = await deliveryCoordinatorInstance.createPackage.call(packageContents, packageWeight, { from: accounts[0] });
     await deliveryCoordinatorInstance.createPackage(packageContents, packageWeight, { from: accounts[0] });
-    await packageTokenInstance.safeTransferFrom(accounts[0], deliveryCoordinatorInstance.address, 1);
+    
+    const receipt = await packageTokenInstance.safeTransferFrom(accounts[0], deliveryCoordinatorInstance.address, packageTokenId);
+    const receiptTokenId = getReceivedTokenId(receipt, accounts[0], receiptTokenInstance.address);
 
-    assert.equal(1, await packageTokenInstance.balanceOf.call(deliveryCoordinatorInstance.address), "The delivery coordinator does not own the correct amount of package tokens.");
-    assert.equal(deliveryCoordinatorInstance.address, await packageTokenInstance.ownerOf.call(1), "The delivery coordinator does not own the recently transferred package token.");
+    assert.equal(deliveryCoordinatorInstance.address, await packageTokenInstance.ownerOf.call(packageTokenId), "The delivery coordinator does not own the recently transferred package token.");
+    assert.equal(accounts[0], await receiptTokenInstance.ownerOf.call(receiptTokenId), "The specified account does not own the newly minted receipt token.");
 
-    assert.equal(1, await receiptTokenInstance.balanceOf.call(accounts[0]), "The specified account does not own the correct amount of receipt tokens.");
-    assert.equal(accounts[0], await receiptTokenInstance.ownerOf.call(1), "The specified account does not own the newly minted receipt token.");
+    const receiptTokenData = await receiptTokenInstance.receiptData.call(receiptTokenId);
 
-    const receiptTokenData = await receiptTokenInstance.receiptData.call(1);
-
-    assert.equal(1, receiptTokenData, "The receipt token was not initialised with the correct package token id.");
+    assert.equal(packageTokenId.toNumber(), receiptTokenData, "The receipt token was not initialised with the correct package token id.");
   });
+
+  it("should not operate on packages not owned by known delivery nodes", async () => {
+    const packageContents = "Box of test stuff";
+    const packageWeight = "10kg";
+
+    const deliveryCoordinatorInstance = await DeliveryCoordinator.deployed();
+    const packageTokenInstance = await PackageToken.deployed();
+    const receiptTokenInstance = await ReceiptToken.deployed();
+
+    const packageTokenId = await deliveryCoordinatorInstance.createPackage.call(packageContents, packageWeight, { from: accounts[0] });
+    await deliveryCoordinatorInstance.createPackage(packageContents, packageWeight, { from: accounts[0] });
+    
+    const receipt = await packageTokenInstance.safeTransferFrom(accounts[0], deliveryCoordinatorInstance.address, packageTokenId);
+    const receiptTokenId = getReceivedTokenId(receipt, accounts[0], receiptTokenInstance.address);
+
+    assert.equal(deliveryCoordinatorInstance.address, await packageTokenInstance.ownerOf.call(packageTokenId), "The delivery coordinator does not own the recently transferred package token.");
+    assert.equal(accounts[0], await receiptTokenInstance.ownerOf.call(receiptTokenId), "The specified account does not own the newly minted receipt token.");
+
+    await expectRevert(receiptTokenInstance.safeTransferFrom(accounts[0], deliveryCoordinatorInstance.address, receiptTokenId), "The package token is not currently being held by a known delivery node");
+  });
+
+  it("should correctly return packages in exchange for valid receipts", async () => {
+    const testNodeName = "Testville";
+    const packageContents = "Box of test stuff";
+    const packageWeight = "10kg";
+
+    const deliveryCoordinatorInstance = await DeliveryCoordinator.deployed();
+    const packageTokenInstance = await PackageToken.deployed();
+    const receiptTokenInstance = await ReceiptToken.deployed();
+
+    await deliveryCoordinatorInstance.addDeliveryNode(testNodeName, { from: accounts[0] });
+    const deliveryNode = await DeliveryNode.at(await deliveryCoordinatorInstance.deliveryNodes.call(0));
+
+    const packageTokenId = await deliveryCoordinatorInstance.createPackage.call(packageContents, packageWeight, { from: accounts[0] });
+    await deliveryCoordinatorInstance.createPackage(packageContents, packageWeight, { from: accounts[0] });
+    
+    const receipt = await packageTokenInstance.safeTransferFrom(accounts[0], deliveryCoordinatorInstance.address, packageTokenId);
+    const receiptTokenId = getReceivedTokenId(receipt, accounts[0], receiptTokenInstance.address);
+
+    assert.equal(deliveryCoordinatorInstance.address, await packageTokenInstance.ownerOf.call(packageTokenId), "The delivery coordinator does not own the recently transferred package token.");
+    assert.equal(accounts[0], await receiptTokenInstance.ownerOf.call(receiptTokenId), "The specified account does not own the newly minted receipt token.");
+
+    await deliveryCoordinatorInstance.forwardPackage(deliveryNode.address, packageTokenId);
+
+    assert.equal(deliveryNode.address, await packageTokenInstance.ownerOf.call(packageTokenId), "The delivery node does not own the recently transferred package token.");
+
+    await receiptTokenInstance.safeTransferFrom(accounts[0], deliveryCoordinatorInstance.address, receiptTokenId);
+
+    assert.equal(accounts[0], await packageTokenInstance.ownerOf.call(packageTokenId), "The specified account does not own the redeemed package token.");
+    await expectRevert(receiptTokenInstance.ownerOf.call(receiptTokenId), "owner query for nonexistent token");
+  });
+
+  function getReceivedTokenId(receipt, recipientAddress, tokenInstanceAddress) {
+    const logEntry = receipt.logs.find(log => {
+      return tokenInstanceAddress == log.address && log.args.from == zeroAddress && log.args.to == recipientAddress;
+    });
+
+    return logEntry.args.tokenId.toNumber();
+  }
 
 });
