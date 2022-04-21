@@ -22,7 +22,7 @@ contract DeliveryCoordinator is ERC721Holder, Ownable {
   }
 
   function addDeliveryNode(string memory _nodeName) external onlyOwner {
-    DeliveryNode newDeliveryNode = new DeliveryNode(_nodeName, DeliveryNode.NodeStatus.ONLINE, packageTokenAddress, receiptTokenAddress);
+    DeliveryNode newDeliveryNode = new DeliveryNode(_nodeName, DeliveryNode.NodeStatus.ONLINE, packageTokenAddress);
     deliveryNodes.push(newDeliveryNode);
     knownDeliveryNodes[address(newDeliveryNode)] = true;
   }

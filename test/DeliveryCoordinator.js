@@ -5,6 +5,7 @@ const DeliveryNode = artifacts.require("./DeliveryNode.sol");
 const PackageToken = artifacts.require("./PackageToken.sol");
 const ReceiptToken = artifacts.require("./ReceiptToken.sol");
 
+// TODO - Update this test to use mock contracts so as to not test the behaviour of contracts which have their own tests
 contract("DeliveryCoordinator", accounts => {
 
   const zeroAddress = '0x0000000000000000000000000000000000000000';

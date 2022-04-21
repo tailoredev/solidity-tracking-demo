@@ -11,23 +11,21 @@ contract DeliveryNode is ERC721Holder, Ownable {
 
   enum NodeStatus{
     ONLINE,
-    OFFILINE
+    OFFLINE
   }
 
   string public name;
   NodeStatus public status;
   address public packageTokenAddress;
-  address public receiptTokenAddress;
 
-  constructor(string memory _name, NodeStatus _status, address _packageTokenAddress, address _receiptTokenAddress) {
+  constructor(string memory _name, NodeStatus _status, address _packageTokenAddress) {
     name = _name;
     status = _status;
     packageTokenAddress = _packageTokenAddress;
-    receiptTokenAddress = _receiptTokenAddress;
   }
 
   function onERC721Received(address operator, address from, uint256 tokenId, bytes memory data) public override returns (bytes4) {
-    require(status == NodeStatus.ONLINE, "Delivery node is not online");
+    require(status == NodeStatus.ONLINE, "Delivery node is offline");
     require(msg.sender == packageTokenAddress, "ERC721 received is not from known token address");
 
     return super.onERC721Received(operator, from, tokenId, data);
