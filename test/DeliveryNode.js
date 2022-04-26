@@ -10,7 +10,7 @@ contract("DeliveryNode", accounts => {
     const packageContents = "Box of test stuff";
     const packageWeight = "10kg";
 
-    const packageTokenInstance = await PackageToken.deployed();
+    const packageTokenInstance = await PackageToken.new({ from: accounts[0] });
     const deliveryNodeInstance = await DeliveryNode.new("Test node", DeliveryNode.NodeStatus.OFFLINE, packageTokenInstance.address, { from: accounts[0] });
 
     const packageTokenId = await packageTokenInstance.createPackage.call(accounts[0], packageContents, packageWeight);
@@ -22,8 +22,8 @@ contract("DeliveryNode", accounts => {
   });
 
   it("should not accept unknown ERC721 tokens", async () => {
-    const packageTokenInstance = await PackageToken.deployed();
-    const receiptTokenInstance = await ReceiptToken.deployed();
+    const packageTokenInstance = await PackageToken.new({ from: accounts[0] });
+    const receiptTokenInstance = await ReceiptToken.new({ from: accounts[0] });
     const deliveryNodeInstance = await DeliveryNode.new("Test node", DeliveryNode.NodeStatus.ONLINE, packageTokenInstance.address, { from: accounts[0] });
 
     const dummyTokenId = await receiptTokenInstance.createReceipt.call(accounts[0], 1);
@@ -38,7 +38,7 @@ contract("DeliveryNode", accounts => {
     const packageContents = "Box of test stuff";
     const packageWeight = "10kg";
 
-    const packageTokenInstance = await PackageToken.deployed();
+    const packageTokenInstance = await PackageToken.new({ from: accounts[0] });
     const deliveryNodeInstance = await DeliveryNode.new("Test node", DeliveryNode.NodeStatus.ONLINE, packageTokenInstance.address, { from: accounts[0] });
 
     const packageTokenId = await packageTokenInstance.createPackage.call(accounts[0], packageContents, packageWeight);
@@ -61,7 +61,7 @@ contract("DeliveryNode", accounts => {
     const packageContents = "Box of test stuff";
     const packageWeight = "10kg";
 
-    const packageTokenInstance = await PackageToken.deployed();
+    const packageTokenInstance = await PackageToken.new({ from: accounts[0] });
     const deliveryNodeInstance = await DeliveryNode.new("Test node", DeliveryNode.NodeStatus.ONLINE, packageTokenInstance.address, { from: accounts[0] });
 
     const packageTokenId = await packageTokenInstance.createPackage.call(accounts[0], packageContents, packageWeight);

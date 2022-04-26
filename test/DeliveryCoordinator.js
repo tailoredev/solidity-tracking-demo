@@ -40,7 +40,7 @@ contract("DeliveryCoordinator", accounts => {
     const packageWeight = "10kg";
 
     const deliveryCoordinatorInstance = await DeliveryCoordinator.deployed();
-    const packageTokenInstance = await PackageToken.deployed();
+    const packageTokenInstance = await PackageToken.at(await deliveryCoordinatorInstance.packageToken.call());
 
     const packageTokenId = await deliveryCoordinatorInstance.createPackage.call(packageContents, packageWeight, { from: accounts[0] });
     await deliveryCoordinatorInstance.createPackage(packageContents, packageWeight, { from: accounts[0] });
@@ -65,7 +65,7 @@ contract("DeliveryCoordinator", accounts => {
     const packageWeight = "10kg";
 
     const deliveryCoordinatorInstance = await DeliveryCoordinator.deployed();
-    const packageTokenInstance = await PackageToken.deployed();
+    const packageTokenInstance = await PackageToken.at(await deliveryCoordinatorInstance.packageToken.call());
 
     await deliveryCoordinatorInstance.addDeliveryNode(testNodeName, { from: accounts[0] });
     const deliveryNode = await DeliveryNode.at(await deliveryCoordinatorInstance.deliveryNodes.call(0));
@@ -85,7 +85,7 @@ contract("DeliveryCoordinator", accounts => {
     const packageWeight = "10kg";
 
     const deliveryCoordinatorInstance = await DeliveryCoordinator.deployed();
-    const packageTokenInstance = await PackageToken.deployed();
+    const packageTokenInstance = await PackageToken.at(await deliveryCoordinatorInstance.packageToken.call());
 
     await deliveryCoordinatorInstance.addDeliveryNode(testNodeName, { from: accounts[0] });
     const deliveryNode = await DeliveryNode.at(await deliveryCoordinatorInstance.deliveryNodes.call(0));
@@ -111,7 +111,7 @@ contract("DeliveryCoordinator", accounts => {
     const packageWeight = "10kg";
 
     const deliveryCoordinatorInstance = await DeliveryCoordinator.deployed();
-    const packageTokenInstance = await PackageToken.deployed();
+    const packageTokenInstance = await PackageToken.at(await deliveryCoordinatorInstance.packageToken.call());
 
     await deliveryCoordinatorInstance.addDeliveryNode(testNodeOneName, { from: accounts[0] });
     await deliveryCoordinatorInstance.addDeliveryNode(testNodeTwoName, { from: accounts[0] });
@@ -148,8 +148,8 @@ contract("DeliveryCoordinator", accounts => {
     const packageWeight = "10kg";
 
     const deliveryCoordinatorInstance = await DeliveryCoordinator.deployed();
-    const packageTokenInstance = await PackageToken.deployed();
-    const receiptTokenInstance = await ReceiptToken.deployed();
+    const packageTokenInstance = await PackageToken.at(await deliveryCoordinatorInstance.packageToken.call());
+    const receiptTokenInstance = await ReceiptToken.at(await deliveryCoordinatorInstance.receiptToken.call());
 
     const packageTokenId = await deliveryCoordinatorInstance.createPackage.call(packageContents, packageWeight, { from: accounts[0] });
     await deliveryCoordinatorInstance.createPackage(packageContents, packageWeight, { from: accounts[0] });
@@ -170,8 +170,8 @@ contract("DeliveryCoordinator", accounts => {
     const packageWeight = "10kg";
 
     const deliveryCoordinatorInstance = await DeliveryCoordinator.deployed();
-    const packageTokenInstance = await PackageToken.deployed();
-    const receiptTokenInstance = await ReceiptToken.deployed();
+    const packageTokenInstance = await PackageToken.at(await deliveryCoordinatorInstance.packageToken.call());
+    const receiptTokenInstance = await ReceiptToken.at(await deliveryCoordinatorInstance.receiptToken.call());
 
     const packageTokenId = await deliveryCoordinatorInstance.createPackage.call(packageContents, packageWeight, { from: accounts[0] });
     await deliveryCoordinatorInstance.createPackage(packageContents, packageWeight, { from: accounts[0] });
@@ -191,8 +191,8 @@ contract("DeliveryCoordinator", accounts => {
     const packageWeight = "10kg";
 
     const deliveryCoordinatorInstance = await DeliveryCoordinator.deployed();
-    const packageTokenInstance = await PackageToken.deployed();
-    const receiptTokenInstance = await ReceiptToken.deployed();
+    const packageTokenInstance = await PackageToken.at(await deliveryCoordinatorInstance.packageToken.call());
+    const receiptTokenInstance = await ReceiptToken.at(await deliveryCoordinatorInstance.receiptToken.call());
 
     await deliveryCoordinatorInstance.addDeliveryNode(testNodeName, { from: accounts[0] });
     const deliveryNode = await DeliveryNode.at(await deliveryCoordinatorInstance.deliveryNodes.call(0));
