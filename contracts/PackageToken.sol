@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
+import '@openzeppelin/contracts/access/Ownable.sol';
 import '@openzeppelin/contracts/token/ERC721/ERC721.sol';
 import '@openzeppelin/contracts/utils/Counters.sol';
 
-contract PackageToken is ERC721 {
+contract PackageToken is ERC721, Ownable {
 
     using Counters for Counters.Counter;
 
@@ -19,7 +20,7 @@ contract PackageToken is ERC721 {
   
     constructor() ERC721("PackageToken", "PKG") {}
 
-    function createPackage(address packageSender, string memory packageContents, string memory packageWeight) public returns (uint256) {
+    function createPackage(address packageSender, string memory packageContents, string memory packageWeight) external onlyOwner returns (uint256) {
         _tokenIds.increment();
         
         uint256 newPackageId = _tokenIds.current();
