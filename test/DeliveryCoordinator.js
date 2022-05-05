@@ -10,12 +10,6 @@ contract("DeliveryCoordinator", accounts => {
 
   const zeroAddress = '0x0000000000000000000000000000000000000000';
 
-  it("should not allow non-owner addresses to add nodes", async () => {
-    const deliveryCoordinatorInstance = await DeliveryCoordinator.deployed();
-
-    await expectRevert(deliveryCoordinatorInstance.addDeliveryNode("Testville", { from: accounts[1] }), "Ownable: caller is not the owner");
-  });
-
   it("should successfully deploy additional delivery nodes", async () => {
     const testNodeOneName = "Testville";
     const testNodeTwoName = "Test City";
@@ -33,6 +27,12 @@ contract("DeliveryCoordinator", accounts => {
 
     assert.equal(testNodeTwoName, await secondInitialisedNode.name.call(), "The node was not initialised with the correct name.");
     assert.equal(DeliveryNode.NodeStatus.ONLINE, await secondInitialisedNode.status.call(), "The node was not initialised with the correct status.");
+  });
+
+  it("should correctly return hte number of delivery nodes", async () => {
+    const deliveryCoordinatorInstance = await DeliveryCoordinator.deployed();
+
+    assert.equal(2, await deliveryCoordinatorInstance.numberOfDeliveryNodes.call(), "The incorrect number of delivery nodes as returned.");    
   });
 
   it("should correctly issue a package token", async () => {
