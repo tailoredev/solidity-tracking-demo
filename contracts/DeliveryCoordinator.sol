@@ -11,7 +11,7 @@ contract DeliveryCoordinator is ERC721Holder {
 
   PackageToken public packageToken;
   ReceiptToken public receiptToken;
-  DeliveryNode[] public deliveryNodes; // TODO - Do we really need this?
+  DeliveryNode[] public deliveryNodes; // TODO - Use only one of the two delivery node properties
   mapping(address => bool) private knownDeliveryNodes;
 
   constructor() {
@@ -23,6 +23,10 @@ contract DeliveryCoordinator is ERC721Holder {
     DeliveryNode newDeliveryNode = new DeliveryNode(_nodeName, DeliveryNode.NodeStatus.ONLINE, address(packageToken));
     deliveryNodes.push(newDeliveryNode);
     knownDeliveryNodes[address(newDeliveryNode)] = true;
+  }
+
+  function numberOfDeliveryNodes() external view returns(uint256) {
+    return deliveryNodes.length;
   }
 
   function createPackage(string memory _packageContents, string memory _packageWeight) external returns (uint256) {
