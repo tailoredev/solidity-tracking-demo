@@ -1,14 +1,13 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import '@openzeppelin/contracts/access/Ownable.sol';
 import '@openzeppelin/contracts/token/ERC721/utils/ERC721Holder.sol';
 
 import "./DeliveryNode.sol";
 import "./PackageToken.sol";
 import "./ReceiptToken.sol";
 
-contract DeliveryCoordinator is ERC721Holder, Ownable {
+contract DeliveryCoordinator is ERC721Holder {
 
   PackageToken public packageToken;
   ReceiptToken public receiptToken;
@@ -20,7 +19,7 @@ contract DeliveryCoordinator is ERC721Holder, Ownable {
     receiptToken = new ReceiptToken();
   }
 
-  function addDeliveryNode(string memory _nodeName) external onlyOwner {
+  function addDeliveryNode(string memory _nodeName) external {
     DeliveryNode newDeliveryNode = new DeliveryNode(_nodeName, DeliveryNode.NodeStatus.ONLINE, address(packageToken));
     deliveryNodes.push(newDeliveryNode);
     knownDeliveryNodes[address(newDeliveryNode)] = true;

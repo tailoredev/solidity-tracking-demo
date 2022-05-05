@@ -10,12 +10,6 @@ contract("DeliveryCoordinator", accounts => {
 
   const zeroAddress = '0x0000000000000000000000000000000000000000';
 
-  it("should not allow non-owner addresses to add nodes", async () => {
-    const deliveryCoordinatorInstance = await DeliveryCoordinator.deployed();
-
-    await expectRevert(deliveryCoordinatorInstance.addDeliveryNode("Testville", { from: accounts[1] }), "Ownable: caller is not the owner");
-  });
-
   it("should successfully deploy additional delivery nodes", async () => {
     const testNodeOneName = "Testville";
     const testNodeTwoName = "Test City";
