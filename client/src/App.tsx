@@ -32,14 +32,9 @@ class App extends Component {
 
       // Get the contract instance.
       const networkId = (await web3.eth.net.getId()).toString();
-
       const deliveryCoordinatorContract = (DeliveryCoordinatorContract as ContractObject);
-
-      let deployedNetwork;
-
-      if (deliveryCoordinatorContract?.networks) {
-        deployedNetwork = deliveryCoordinatorContract.networks[networkId]; // TODO - This line is causing a build failure
-      }
+      const deployedNetwork = deliveryCoordinatorContract.networks
+        ? deliveryCoordinatorContract.networks[networkId] : undefined;
 
       const deliveryCoordinatorInstance = new web3.eth.Contract(
         DeliveryCoordinatorContract.abi as AbiItem[],
@@ -83,7 +78,6 @@ class App extends Component {
         deliveryCoordinatorInstance,
         packageTokenInstance,
         receiptTokenInstance,
-        // deliveryNodeContracts: deliveryNodeInstances,
         deliveryNodeNames
       });
     } catch (error) {
@@ -101,9 +95,6 @@ class App extends Component {
       accounts,
       deliveryCoordinatorInstance: deployedDeliveryCoordinatorContract
     } = this.state as any;
-
-    // const accounts = this.state.accounts;
-    // const deployedDeliveryCoordinatorContract = this.state.deliveryCoordinatorContract;
 
     await deployedDeliveryCoordinatorContract.methods.addDeliveryNode(this.newDeliveryNodeName)
       .send({ from: accounts[0] });
@@ -144,7 +135,7 @@ class App extends Component {
       return (
         <div className="app">
           <br />
-          <button type="button" className="btn btn-light text-dark" onClick={this.connectWallet}>Connect wallet</button>
+          <button type="button" className="btn btn-light text-dark" onClick={() => this.connectWallet()}>Connect wallet</button>
         </div>
       );
     }
@@ -180,7 +171,7 @@ class App extends Component {
         />
         <br />
         <br />
-        <button type="button" className="btn btn-light text-dark" onClick={this.addDeliveryNode}>Add node</button>
+        <button type="button" className="btn btn-light text-dark" onClick={() => this.addDeliveryNode()}>Add node</button>
       </div>
     );
   }
