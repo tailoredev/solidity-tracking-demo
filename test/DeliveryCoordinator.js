@@ -185,7 +185,10 @@ contract("DeliveryCoordinator", accounts => {
     assert.equal(deliveryCoordinatorInstance.address, await packageTokenInstance.ownerOf.call(packageTokenId), "The delivery coordinator does not own the recently transferred package token.");
     assert.equal(accounts[0], await receiptTokenInstance.ownerOf.call(receiptTokenId), "The specified account does not own the newly minted receipt token.");
 
-    await expectRevert(receiptTokenInstance.safeTransferFrom(accounts[0], deliveryCoordinatorInstance.address, receiptTokenId), "The package token is not currently being held by a known delivery node");
+    await expectRevert(
+      receiptTokenInstance.safeTransferFrom(accounts[0], deliveryCoordinatorInstance.address, receiptTokenId, { from: accounts[0], gas: 5000000, gasPrice: 500000000 }),
+      "The package token is not currently being held by a known delivery node"
+    );
   });
 
   it("should correctly return packages in exchange for valid receipts", async () => {
