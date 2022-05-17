@@ -11,6 +11,7 @@ import getWeb3 from './getWeb3';
 import './App.css';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import PackageTokenData from './model/PackageTokenData';
+import ReceiptTokenData from './model/ReceiptTokenData';
 
 // TODO - Split this component up into smaller, logical components
 class App extends Component {
@@ -64,6 +65,7 @@ class App extends Component {
 
       await this.refreshDeliveryNodes();
       await this.refreshPackageTokens();
+      await this.refreshReceiptTokens();
     } catch (error) {
       // Catch any errors for any of the above operations.
       alert(
@@ -95,6 +97,30 @@ class App extends Component {
       .createPackage(this.newPackageContents, this.newPackageWeight).send({ from: accounts[0] });
 
     await this.refreshPackageTokens();
+  }
+
+  async sendPackageToken(packageTokenId: number | undefined) {
+    const {
+      accounts,
+      deliveryCoordinatorInstance: deployedDeliveryCoordinatorContract,
+      packageTokenInstance: deployedPackageTokenContract
+    } = this.state as any;
+
+    if (packageTokenId) {
+      await deployedPackageTokenContract.methods
+        .safeTransferFrom(
+          accounts[0],
+          deployedDeliveryCoordinatorContract.options.address,
+          packageTokenId
+        ).send({ from: accounts[0] });
+
+      await this.refreshPackageTokens();
+      await this.refreshReceiptTokens();
+    }
+  }
+
+  async redeemReceiptToken(receiptTokenId: number | undefined) {
+    // TODO - Pending implementation
   }
 
   private async refreshDeliveryNodes() {
@@ -166,6 +192,44 @@ class App extends Component {
     });
   }
 
+  private async refreshReceiptTokens() {
+    const {
+      accounts,
+      receiptTokenInstance: deployedReceiptTokenContract
+    } = this.state as any;
+
+    const ownedReceiptTokens = [];
+    let numberOfReceiptTokensOwned = 0;
+
+    try {
+      numberOfReceiptTokensOwned = await deployedReceiptTokenContract.methods
+        .balanceOf(accounts[0]).call();
+    } catch (error) {
+      console.log('Error determining account receipt token balance', error);
+    }
+
+    if (numberOfReceiptTokensOwned > 0) {
+      for (let idx = 0; idx < numberOfReceiptTokensOwned; idx += 1) {
+        const packageTokenId = await deployedReceiptTokenContract.methods
+          .tokenOfOwnerByIndex(accounts[0], idx).call();
+
+        const correspondingPackageTokenId = await deployedReceiptTokenContract.methods
+          .receiptData(packageTokenId).call();
+
+        const receiptData = new ReceiptTokenData(
+          packageTokenId,
+          correspondingPackageTokenId
+        );
+
+        ownedReceiptTokens.push(receiptData);
+      }
+    }
+
+    this.setState({
+      ownedReceiptTokens
+    });
+  }
+
   render() {
     const {
       web3,
@@ -173,7 +237,8 @@ class App extends Component {
       packageTokenInstance,
       receiptTokenInstance,
       deliveryNodeNames,
-      ownedPackageTokens
+      ownedPackageTokens,
+      ownedReceiptTokens
     } = this.state as any;
 
     if (!web3) {
@@ -239,9 +304,24 @@ class App extends Component {
         <div>
           {ownedPackageTokens
           && ownedPackageTokens.map((packageTokenData: PackageTokenData, idx: number) => (
-            <li key={idx}>
-              {` ${packageTokenData.tokenId}: ${packageTokenData.packageContents} ${packageTokenData.packageWeight}`}
-            </li>
+            <>
+              <li key={idx}>
+                {` ${packageTokenData.tokenId}: ${packageTokenData.packageContents} ${packageTokenData.packageWeight}`}
+              </li>
+              <button type="button" className="btn btn-light text-dark" onClick={() => this.sendPackageToken(packageTokenData.tokenId)}>Send package</button>
+            </>
+          ))}
+        </div>
+        <h2>Current Receipts</h2>
+        <div>
+          {ownedReceiptTokens
+          && ownedReceiptTokens.map((receiptTokenData: ReceiptTokenData, idx: number) => (
+            <>
+              <li key={idx}>
+                {` ${receiptTokenData.tokenId}: ${receiptTokenData.correspondingPackageTokenId}`}
+              </li>
+              <button type="button" className="btn btn-light text-dark" onClick={() => this.redeemReceiptToken(receiptTokenData.tokenId)}>Redeem</button>
+            </>
           ))}
         </div>
       </div>
