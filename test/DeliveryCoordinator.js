@@ -140,7 +140,10 @@ contract("DeliveryCoordinator", accounts => {
     const packageTokenId = await dummyERC721.createPackage.call(accounts[0], "test", "test");
     await dummyERC721.createPackage(accounts[0], "test", "test");
 
-    await expectRevert(dummyERC721.safeTransferFrom(accounts[0], deliveryCoordinatorInstance.address, packageTokenId), "ERC721 received is not from known token address");
+    await expectRevert(
+      dummyERC721.safeTransferFrom(accounts[0], deliveryCoordinatorInstance.address, packageTokenId, { from: accounts[0], gas: 5000000, gasPrice: 500000000 }),
+      "ERC721 received is not from known token address"
+    );
   });
 
   it("should correctly issue a receipt token", async () => {

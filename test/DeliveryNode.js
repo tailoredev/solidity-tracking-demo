@@ -18,7 +18,10 @@ contract("DeliveryNode", accounts => {
 
     assert.equal(accounts[0], await packageTokenInstance.ownerOf.call(packageTokenId), "The specified account does not own the newly minted package token.");
 
-    await expectRevert(packageTokenInstance.safeTransferFrom(accounts[0], deliveryNodeInstance.address, packageTokenId), "Delivery node is offline");
+    await expectRevert(
+      packageTokenInstance.safeTransferFrom(accounts[0], deliveryNodeInstance.address, packageTokenId, { from: accounts[0], gas: 5000000, gasPrice: 500000000 }),
+      "Delivery node is offline"
+    );
   });
 
   it("should not accept unknown ERC721 tokens", async () => {

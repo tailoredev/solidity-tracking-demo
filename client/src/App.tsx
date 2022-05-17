@@ -10,10 +10,13 @@ import getWeb3 from './getWeb3';
 
 import './App.css';
 import 'bootstrap/dist/css/bootstrap.min.css';
+import PackageTokenData from './model/PackageTokenData';
 
 // TODO - Split this component up into smaller, logical components
 class App extends Component {
   newDeliveryNodeName = '';
+  newPackageContents = '';
+  newPackageWeight = '';
 
   constructor(props: any) {
     super(props);
@@ -51,35 +54,16 @@ class App extends Component {
         await deliveryCoordinatorInstance.methods.receiptToken().call()
       );
 
-      const deliveryNodeInstances = [];
-      // TODO - The names should be rendered by a separate component and not stored in the state
-      const deliveryNodeNames = [];
-
-      const numberOfDeliveryNodes = await deliveryCoordinatorInstance.methods
-        .numberOfDeliveryNodes().call();
-
-      for (let idx = 0; idx < numberOfDeliveryNodes; idx += 1) {
-        const deliveryNodeAddress = await deliveryCoordinatorInstance.methods
-          .deliveryNodes(idx).call();
-        const deliveryNodeInstance = new web3.eth.Contract(
-          DeliveryNodeContract.abi as AbiItem[],
-          deliveryNodeAddress
-        );
-
-        deliveryNodeInstances.push(deliveryNodeInstance);
-        deliveryNodeNames.push(await deliveryNodeInstance.methods.name().call());
-      }
-
-      // Set web3, accounts, and contract to the state, and then proceed with an
-      // example of interacting with the contract's methods.
       this.setState({
         web3,
         accounts,
         deliveryCoordinatorInstance,
         packageTokenInstance,
-        receiptTokenInstance,
-        deliveryNodeNames
+        receiptTokenInstance
       });
+
+      await this.refreshDeliveryNodes();
+      await this.refreshPackageTokens();
     } catch (error) {
       // Catch any errors for any of the above operations.
       alert(
@@ -91,7 +75,6 @@ class App extends Component {
 
   async addDeliveryNode() {
     const {
-      web3,
       accounts,
       deliveryCoordinatorInstance: deployedDeliveryCoordinatorContract
     } = this.state as any;
@@ -99,7 +82,29 @@ class App extends Component {
     await deployedDeliveryCoordinatorContract.methods.addDeliveryNode(this.newDeliveryNodeName)
       .send({ from: accounts[0] });
 
+    await this.refreshDeliveryNodes();
+  }
+
+  async createPackage() {
+    const {
+      accounts,
+      deliveryCoordinatorInstance: deployedDeliveryCoordinatorContract
+    } = this.state as any;
+
+    await deployedDeliveryCoordinatorContract.methods
+      .createPackage(this.newPackageContents, this.newPackageWeight).send({ from: accounts[0] });
+
+    await this.refreshPackageTokens();
+  }
+
+  private async refreshDeliveryNodes() {
+    const {
+      web3,
+      deliveryCoordinatorInstance: deployedDeliveryCoordinatorContract
+    } = this.state as any;
+
     const deliveryNodeInstances = [];
+    // TODO - The names should be rendered by a separate component and not stored in the state
     const deliveryNodeNames = [];
 
     const numberOfDeliveryNodes = await deployedDeliveryCoordinatorContract.methods
@@ -122,13 +127,53 @@ class App extends Component {
     });
   }
 
+  private async refreshPackageTokens() {
+    const {
+      accounts,
+      packageTokenInstance: deployedPackageTokenContract
+    } = this.state as any;
+
+    const ownedPackageTokens = [];
+    let numberOfPackageTokensOwned = 0;
+
+    try {
+      numberOfPackageTokensOwned = await deployedPackageTokenContract.methods
+        .balanceOf(accounts[0]).call();
+    } catch (error) {
+      console.log('Error determining account package token balance', error);
+    }
+
+    if (numberOfPackageTokensOwned > 0) {
+      for (let idx = 0; idx < numberOfPackageTokensOwned; idx += 1) {
+        const packageTokenId = await deployedPackageTokenContract.methods
+          .tokenOfOwnerByIndex(accounts[0], idx).call();
+
+        const packageInfo = await deployedPackageTokenContract.methods
+          .packageData(packageTokenId).call();
+
+        const packageData = new PackageTokenData(
+          packageTokenId,
+          packageInfo.packageContents,
+          packageInfo.packageWeight
+        );
+
+        ownedPackageTokens.push(packageData);
+      }
+    }
+
+    this.setState({
+      ownedPackageTokens
+    });
+  }
+
   render() {
     const {
       web3,
       deliveryCoordinatorInstance,
       packageTokenInstance,
       receiptTokenInstance,
-      deliveryNodeNames
+      deliveryNodeNames,
+      ownedPackageTokens
     } = this.state as any;
 
     if (!web3) {
@@ -147,20 +192,21 @@ class App extends Component {
         <br />
         <div>
           The delivery coordinator contract is deployed at:
-          {deliveryCoordinatorInstance.options.address}
+          {` ${deliveryCoordinatorInstance.options.address}`}
         </div>
         <div>
           The package token contract is deployed at:
-          {packageTokenInstance.options.address}
+          {` ${packageTokenInstance.options.address}`}
         </div>
         <div>
           The receipt token contract is deployed at:
-          {receiptTokenInstance.options.address}
+          {` ${receiptTokenInstance.options.address}`}
         </div>
         <br />
         <h2>Nodes Available</h2>
         <div>
-          {deliveryNodeNames.map((name: string, idx: number) => (<li key={idx}>{name}</li>))}
+          {deliveryNodeNames
+          && deliveryNodeNames.map((name: string, idx: number) => (<li key={idx}>{name}</li>))}
         </div>
         <h2>Add Node</h2>
         <br />
@@ -172,6 +218,32 @@ class App extends Component {
         <br />
         <br />
         <button type="button" className="btn btn-light text-dark" onClick={() => this.addDeliveryNode()}>Add node</button>
+        <br />
+        <h2>Create Package</h2>
+        <br />
+        <input
+          type="text"
+          placeholder="Package contents"
+          onChange={(event) => { this.newPackageContents = event.target.value; }}
+        />
+        <br />
+        <input
+          type="text"
+          placeholder="Package weight"
+          onChange={(event) => { this.newPackageWeight = event.target.value; }}
+        />
+        <br />
+        <button type="button" className="btn btn-light text-dark" onClick={() => this.createPackage()}>Create package</button>
+        <br />
+        <h2>Current Packages</h2>
+        <div>
+          {ownedPackageTokens
+          && ownedPackageTokens.map((packageTokenData: PackageTokenData, idx: number) => (
+            <li key={idx}>
+              {` ${packageTokenData.tokenId}: ${packageTokenData.packageContents} ${packageTokenData.packageWeight}`}
+            </li>
+          ))}
+        </div>
       </div>
     );
   }
