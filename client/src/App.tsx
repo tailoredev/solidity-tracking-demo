@@ -12,6 +12,7 @@ import './App.css';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import PackageTokenData from './model/PackageTokenData';
 import ReceiptTokenData from './model/ReceiptTokenData';
+import DeliveryNodeData from './model/DeliveryNodeData';
 
 // TODO - Split this component up into smaller, logical components
 class App extends Component {
@@ -130,8 +131,6 @@ class App extends Component {
     } = this.state as any;
 
     const deliveryNodeInstances = [];
-    // TODO - The names should be rendered by a separate component and not stored in the state
-    const deliveryNodeNames = [];
 
     const numberOfDeliveryNodes = await deployedDeliveryCoordinatorContract.methods
       .numberOfDeliveryNodes().call();
@@ -139,17 +138,27 @@ class App extends Component {
     for (let idx = 0; idx < numberOfDeliveryNodes; idx += 1) {
       const deliveryNodeAddress = await deployedDeliveryCoordinatorContract.methods
         .deliveryNodes(idx).call();
+
       const deliveryNodeInstance = new web3.eth.Contract(
         DeliveryNodeContract.abi,
         deliveryNodeAddress
       );
 
-      deliveryNodeInstances.push(deliveryNodeInstance);
-      deliveryNodeNames.push(await deliveryNodeInstance.methods.name().call());
+      const deliveryNodeName = await deliveryNodeInstance.methods.name().call();
+      const deliveryNodeStatusIndex = await deliveryNodeInstance.methods.status().call();
+      const deliveryNodeStatus = DeliveryNodeData.STATUS[deliveryNodeStatusIndex];
+
+      const deliveryNodeData = new DeliveryNodeData(
+        deliveryNodeName,
+        deliveryNodeStatus,
+        deliveryNodeAddress
+      );
+
+      deliveryNodeInstances.push(deliveryNodeData);
     }
 
     this.setState({
-      deliveryNodeNames
+      deliveryNodeInstances
     });
   }
 
@@ -236,7 +245,7 @@ class App extends Component {
       deliveryCoordinatorInstance,
       packageTokenInstance,
       receiptTokenInstance,
-      deliveryNodeNames,
+      deliveryNodeInstances,
       ownedPackageTokens,
       ownedReceiptTokens
     } = this.state as any;
@@ -270,8 +279,12 @@ class App extends Component {
         <br />
         <h2>Nodes Available</h2>
         <div>
-          {deliveryNodeNames
-          && deliveryNodeNames.map((name: string, idx: number) => (<li key={idx}>{name}</li>))}
+          {deliveryNodeInstances
+          && deliveryNodeInstances.map((deliveryNodeData: DeliveryNodeData, idx: number) => (
+            <li key={idx}>
+              {` ${deliveryNodeData.nodeName} - ${deliveryNodeData.nodeStatus} - ${deliveryNodeData.nodeAddress}`}
+            </li>
+          ))}
         </div>
         <h2>Add Node</h2>
         <br />
