@@ -164,24 +164,26 @@ class App extends Component {
 
   private async refreshPackageTokens() {
     const {
-      accounts,
       packageTokenInstance: deployedPackageTokenContract
     } = this.state as any;
 
     const ownedPackageTokens = [];
-    let numberOfPackageTokensOwned = 0;
+    let totalNumberOfPackageTokens = 0;
 
     try {
-      numberOfPackageTokensOwned = await deployedPackageTokenContract.methods
-        .balanceOf(accounts[0]).call();
+      totalNumberOfPackageTokens = await deployedPackageTokenContract.methods
+        .totalSupply().call();
     } catch (error) {
       console.log('Error determining account package token balance', error);
     }
 
-    if (numberOfPackageTokensOwned > 0) {
-      for (let idx = 0; idx < numberOfPackageTokensOwned; idx += 1) {
+    if (totalNumberOfPackageTokens > 0) {
+      for (let idx = 0; idx < totalNumberOfPackageTokens; idx += 1) {
         const packageTokenId = await deployedPackageTokenContract.methods
-          .tokenOfOwnerByIndex(accounts[0], idx).call();
+          .tokenByIndex(idx).call();
+
+        const tokenOwnerAddress = await deployedPackageTokenContract.methods
+          .ownerOf(packageTokenId).call();
 
         const packageInfo = await deployedPackageTokenContract.methods
           .packageData(packageTokenId).call();
@@ -189,7 +191,9 @@ class App extends Component {
         const packageData = new PackageTokenData(
           packageTokenId,
           packageInfo.packageContents,
-          packageInfo.packageWeight
+          packageInfo.packageWeight,
+          tokenOwnerAddress,
+          this.getAddressName(tokenOwnerAddress)
         );
 
         ownedPackageTokens.push(packageData);
@@ -237,6 +241,34 @@ class App extends Component {
     this.setState({
       ownedReceiptTokens
     });
+  }
+
+  private getAddressName(address: string): string {
+    const {
+      accounts,
+      deliveryCoordinatorInstance: deployedDeliveryCoordinatorContract,
+      deliveryNodeInstances
+    } = this.state as any;
+
+    if (accounts[0] === address) {
+      return 'You!';
+    }
+
+    if (deployedDeliveryCoordinatorContract.options.address === address) {
+      return 'Delivery Coordinator';
+    }
+
+    if (deliveryNodeInstances && deliveryNodeInstances.length > 0) {
+      const matchingNodeInstance = deliveryNodeInstances.find(
+        (deliveryNodeInstance: DeliveryNodeData) => deliveryNodeInstance.nodeAddress === address
+      );
+
+      if (matchingNodeInstance) {
+        return matchingNodeInstance.nodeName;
+      }
+    }
+
+    return address;
   }
 
   render() {
@@ -319,7 +351,7 @@ class App extends Component {
           && ownedPackageTokens.map((packageTokenData: PackageTokenData, idx: number) => (
             <>
               <li key={idx}>
-                {` ${packageTokenData.tokenId}: ${packageTokenData.packageContents} ${packageTokenData.packageWeight}`}
+                {`Token ID: ${packageTokenData.tokenId} - ${packageTokenData.packageContents} - ${packageTokenData.packageWeight} - Owner: ${packageTokenData.owner}`}
               </li>
               <button type="button" className="btn btn-light text-dark" onClick={() => this.sendPackageToken(packageTokenData.tokenId)}>Send package</button>
             </>

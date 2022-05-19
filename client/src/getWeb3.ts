@@ -11,7 +11,7 @@ const getWeb3 = () => new Promise(async (resolve, reject) => {
     const web3Provider = new Web3(ethereum);
     try {
       // Request account access if needed
-      await ethereum.enable();
+      await ethereum.request({ method: 'eth_requestAccounts' });
       // Accounts now exposed
       resolve(web3Provider);
     } catch (error) {
