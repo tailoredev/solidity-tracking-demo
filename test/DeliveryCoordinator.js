@@ -29,7 +29,7 @@ contract("DeliveryCoordinator", accounts => {
     assert.equal(DeliveryNode.NodeStatus.ONLINE, await secondInitialisedNode.status.call(), "The node was not initialised with the correct status.");
   });
 
-  it("should correctly return hte number of delivery nodes", async () => {
+  it("should correctly return the number of delivery nodes", async () => {
     const deliveryCoordinatorInstance = await DeliveryCoordinator.deployed();
 
     assert.equal(2, await deliveryCoordinatorInstance.numberOfDeliveryNodes.call(), "The incorrect number of delivery nodes as returned.");    
