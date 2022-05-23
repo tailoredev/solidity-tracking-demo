@@ -53,7 +53,13 @@ contract DeliveryCoordinator is ERC721Holder {
       require(msg.sender == address(packageToken) || msg.sender == address(receiptToken), "ERC721 received is not from known token address");
 
       if (msg.sender == address(packageToken)) {
-        packageTokenReceived(from, tokenId);
+        address recipient = from;
+
+        if (data.length > 0) {
+          recipient = bytesToAddress(data);
+        }
+
+        packageTokenReceived(recipient, tokenId);
       }
 
       if (msg.sender == address(receiptToken)) {
@@ -63,8 +69,16 @@ contract DeliveryCoordinator is ERC721Holder {
       return super.onERC721Received(operator, from, tokenId, data);
   }
 
-  function packageTokenReceived(address from, uint256 packageTokenId) internal {
-    receiptToken.createReceipt(from, packageTokenId);
+  function bytesToAddress(bytes memory _bytes) internal pure returns (address addr) {
+    require(_bytes.length == 20, "Data provided is not the required address length of 20 bytes");
+
+    assembly {
+        addr := mload(add(_bytes, 20))
+    } 
+  }
+
+  function packageTokenReceived(address recipient, uint256 packageTokenId) internal {
+    receiptToken.createReceipt(recipient, packageTokenId);
   }
 
   function receiptTokenReceived(address from, uint256 receiptTokenId) internal {    
