@@ -104,24 +104,58 @@ class App extends Component {
     const {
       accounts,
       deliveryCoordinatorInstance: deployedDeliveryCoordinatorContract,
-      packageTokenInstance: deployedPackageTokenContract
+      packageTokenInstance: deployedPackageTokenContract,
+      deliveryNodeInstances
     } = this.state as any;
 
     if (packageTokenId) {
-      await deployedPackageTokenContract.methods
-        .safeTransferFrom(
-          accounts[0],
-          deployedDeliveryCoordinatorContract.options.address,
-          packageTokenId
-        ).send({ from: accounts[0] });
+      const currentPackageOwner = await deployedPackageTokenContract.methods
+        .ownerOf(packageTokenId).call();
 
-      await this.refreshPackageTokens();
-      await this.refreshReceiptTokens();
+      // Ensure this is a known address
+      if (this.getAddressName(currentPackageOwner) !== currentPackageOwner) {
+        if (currentPackageOwner === accounts[0]) {
+          await deployedPackageTokenContract.methods
+            .safeTransferFrom(
+              accounts[0],
+              deployedDeliveryCoordinatorContract.options.address,
+              packageTokenId
+            ).send({ from: accounts[0] });
+        } else { // The token is owned by either the delivery coordinator or a delivery node
+          // TODO - This should rather be user selectable via a filtered drop down
+          const randomDeliveryNodeIndex = Math.floor(Math.random() * deliveryNodeInstances.length);
+          const destinationNode = deliveryNodeInstances[randomDeliveryNodeIndex];
+
+          await deployedDeliveryCoordinatorContract.methods.forwardPackage(
+            destinationNode.nodeAddress,
+            packageTokenId
+          ).send({ from: accounts[0] });
+        }
+
+        await this.refreshPackageTokens();
+        await this.refreshReceiptTokens();
+      }
     }
   }
 
   async redeemReceiptToken(receiptTokenId: number | undefined) {
-    // TODO - Pending implementation
+    const {
+      accounts,
+      deliveryCoordinatorInstance: deployedDeliveryCoordinatorContract,
+      receiptTokenInstance: deployedReceiptTokenContract,
+    } = this.state as any;
+
+    if (receiptTokenId) {
+      await deployedReceiptTokenContract.methods
+      .safeTransferFrom(
+        accounts[0],
+        deployedDeliveryCoordinatorContract.options.address,
+        receiptTokenId
+      ).send({ from: accounts[0] });
+
+      await this.refreshPackageTokens();
+      await this.refreshReceiptTokens();
+    }
   }
 
   private async refreshDeliveryNodes() {
