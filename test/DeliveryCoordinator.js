@@ -99,7 +99,7 @@ contract("DeliveryCoordinator", accounts => {
 
     assert.equal(deliveryCoordinatorInstance.address, await packageTokenInstance.ownerOf.call(packageTokenId), "The delivery coordinator does not own the recently transferred package token.");
 
-    await deliveryCoordinatorInstance.forwardPackage(deliveryNode.address, packageTokenId), { from: accounts[0] };
+    await deliveryCoordinatorInstance.forwardPackage(deliveryNode.address, packageTokenId, { from: accounts[0] });
 
     assert.equal(deliveryNode.address, await packageTokenInstance.ownerOf.call(packageTokenId), "The delivery node does not own the recently forwarded package token.");
   });
@@ -166,6 +166,50 @@ contract("DeliveryCoordinator", accounts => {
     const receiptTokenData = await receiptTokenInstance.receiptData.call(receiptTokenId);
 
     assert.equal(packageTokenId.toNumber(), receiptTokenData, "The receipt token was not initialised with the correct package token id.");
+  });
+
+  it("should correctly issue a receipt token to another address", async () => {
+    const packageContents = "Box of test stuff";
+    const packageWeight = "10kg";
+
+    const deliveryCoordinatorInstance = await DeliveryCoordinator.deployed();
+    const packageTokenInstance = await PackageToken.at(await deliveryCoordinatorInstance.packageToken.call());
+    const receiptTokenInstance = await ReceiptToken.at(await deliveryCoordinatorInstance.receiptToken.call());
+
+    const packageTokenId = await deliveryCoordinatorInstance.createPackage.call(packageContents, packageWeight, { from: accounts[0] });
+    await deliveryCoordinatorInstance.createPackage(packageContents, packageWeight, { from: accounts[0] });
+    
+    const receipt = await packageTokenInstance.safeTransferFrom(accounts[0], deliveryCoordinatorInstance.address, packageTokenId, accounts[1]);
+    const receiptTokenId = getReceivedTokenId(receipt, accounts[1], receiptTokenInstance.address);
+
+    assert.equal(deliveryCoordinatorInstance.address, await packageTokenInstance.ownerOf.call(packageTokenId), "The delivery coordinator does not own the recently transferred package token.");
+    assert.equal(accounts[1], await receiptTokenInstance.ownerOf.call(receiptTokenId), "The specified account does not own the newly minted receipt token.");
+
+    const receiptTokenData = await receiptTokenInstance.receiptData.call(receiptTokenId);
+
+    assert.equal(packageTokenId.toNumber(), receiptTokenData, "The receipt token was not initialised with the correct package token id.");
+  });
+
+  it("should not proceed with issuing a receipt token when given invalid address data", async () => {
+    const packageContents = "Box of test stuff";
+    const packageWeight = "10kg";
+
+    const deliveryCoordinatorInstance = await DeliveryCoordinator.deployed();
+    const packageTokenInstance = await PackageToken.at(await deliveryCoordinatorInstance.packageToken.call());
+
+    const packageTokenId = await deliveryCoordinatorInstance.createPackage.call(packageContents, packageWeight, { from: accounts[0] });
+    await deliveryCoordinatorInstance.createPackage(packageContents, packageWeight, { from: accounts[0] });
+    
+    await expectRevert(
+      packageTokenInstance.methods['safeTransferFrom(address,address,uint256,bytes)'](
+        accounts[0],
+        deliveryCoordinatorInstance.address,
+        packageTokenId,
+        web3.utils.asciiToHex("abc123"),
+        { from: accounts[0], gas: 5000000, gasPrice: 500000000 }
+      ),
+      "Data provided is not the required address length of 20 bytes"
+    );
   });
 
   it("should not operate on packages not owned by known delivery nodes", async () => {
