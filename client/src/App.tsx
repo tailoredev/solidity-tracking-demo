@@ -19,6 +19,7 @@ class App extends Component {
   newDeliveryNodeName = '';
   newPackageContents = '';
   newPackageWeight = '';
+  destinationAddress = '';
 
   constructor(props: any) {
     super(props);
@@ -115,12 +116,20 @@ class App extends Component {
       // Ensure this is a known address
       if (this.getAddressName(currentPackageOwner) !== currentPackageOwner) {
         if (currentPackageOwner === accounts[0]) {
-          await deployedPackageTokenContract.methods
-            .safeTransferFrom(
+          if (Web3.utils.isAddress(this.destinationAddress)) {
+            await deployedPackageTokenContract.methods['safeTransferFrom(address,address,uint256,bytes)'](
+              accounts[0],
+              deployedDeliveryCoordinatorContract.options.address,
+              packageTokenId,
+              Web3.utils.hexToBytes(this.destinationAddress)
+            ).send({ from: accounts[0] });  
+          } else {
+            await deployedPackageTokenContract.methods.safeTransferFrom(
               accounts[0],
               deployedDeliveryCoordinatorContract.options.address,
               packageTokenId
             ).send({ from: accounts[0] });
+          }
         } else { // The token is owned by either the delivery coordinator or a delivery node
           // TODO - This should rather be user selectable via a filtered drop down
           const randomDeliveryNodeIndex = Math.floor(Math.random() * deliveryNodeInstances.length);
@@ -147,11 +156,11 @@ class App extends Component {
 
     if (receiptTokenId) {
       await deployedReceiptTokenContract.methods
-      .safeTransferFrom(
-        accounts[0],
-        deployedDeliveryCoordinatorContract.options.address,
-        receiptTokenId
-      ).send({ from: accounts[0] });
+        .safeTransferFrom(
+          accounts[0],
+          deployedDeliveryCoordinatorContract.options.address,
+          receiptTokenId
+        ).send({ from: accounts[0] });
 
       await this.refreshPackageTokens();
       await this.refreshReceiptTokens();
@@ -208,7 +217,7 @@ class App extends Component {
       totalNumberOfPackageTokens = await deployedPackageTokenContract.methods
         .totalSupply().call();
     } catch (error) {
-      console.log('Error determining account package token balance', error);
+      console.log('Error determining total package token balance', error);
     }
 
     if (totalNumberOfPackageTokens > 0) {
@@ -246,26 +255,31 @@ class App extends Component {
     } = this.state as any;
 
     const ownedReceiptTokens = [];
-    let numberOfReceiptTokensOwned = 0;
+    let totalNumberOfReceiptTokens = 0;
 
     try {
-      numberOfReceiptTokensOwned = await deployedReceiptTokenContract.methods
-        .balanceOf(accounts[0]).call();
+      totalNumberOfReceiptTokens = await deployedReceiptTokenContract.methods
+        .totalSupply().call();
     } catch (error) {
-      console.log('Error determining account receipt token balance', error);
+      console.log('Error determining total receipt token balance', error);
     }
 
-    if (numberOfReceiptTokensOwned > 0) {
-      for (let idx = 0; idx < numberOfReceiptTokensOwned; idx += 1) {
-        const packageTokenId = await deployedReceiptTokenContract.methods
-          .tokenOfOwnerByIndex(accounts[0], idx).call();
+    if (totalNumberOfReceiptTokens > 0) {
+      for (let idx = 0; idx < totalNumberOfReceiptTokens; idx += 1) {
+        const receiptTokenId = await deployedReceiptTokenContract.methods
+          .tokenByIndex(idx).call();
 
+        const tokenOwnerAddress = await deployedReceiptTokenContract.methods
+          .ownerOf(receiptTokenId).call();
+        
         const correspondingPackageTokenId = await deployedReceiptTokenContract.methods
-          .receiptData(packageTokenId).call();
+          .receiptData(receiptTokenId).call();
 
         const receiptData = new ReceiptTokenData(
-          packageTokenId,
-          correspondingPackageTokenId
+          receiptTokenId,
+          correspondingPackageTokenId,
+          tokenOwnerAddress,
+          this.getAddressName(tokenOwnerAddress)
         );
 
         ownedReceiptTokens.push(receiptData);
@@ -391,13 +405,19 @@ class App extends Component {
             </>
           ))}
         </div>
+        <br />
+        <input
+          type="text"
+          placeholder="Destination address"
+          onChange={(event) => { this.destinationAddress = event.target.value; }}
+        />
         <h2>Current Receipts</h2>
         <div>
           {ownedReceiptTokens
           && ownedReceiptTokens.map((receiptTokenData: ReceiptTokenData, idx: number) => (
             <>
               <li key={idx}>
-                {` ${receiptTokenData.tokenId}: ${receiptTokenData.correspondingPackageTokenId}`}
+                {`Token ID: ${receiptTokenData.tokenId} - Corresponding Package Token ID: ${receiptTokenData.correspondingPackageTokenId} - Owner: ${receiptTokenData.owner}`}
               </li>
               <button type="button" className="btn btn-light text-dark" onClick={() => this.redeemReceiptToken(receiptTokenData.tokenId)}>Redeem</button>
             </>
