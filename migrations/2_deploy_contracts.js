@@ -1,7 +1,9 @@
 var DeliveryCoordinator = artifacts.require("./DeliveryCoordinator.sol");
+var PackageToken = artifacts.require("./PackageToken.sol");
+var ReceiptToken = artifacts.require("./ReceiptToken.sol");
 
 module.exports = async function(deployer) {
-   // NOTE - This will lose track of all previous versions of contracts deployed from within previous versions of the coordinator
-   // TODO - Rather deploy the token contracts separately then transfer ownership to the delivery coordinator
-  await deployer.deploy(DeliveryCoordinator);
+  await deployer.deploy(PackageToken);
+  await deployer.deploy(ReceiptToken);
+  await deployer.deploy(DeliveryCoordinator, PackageToken.address, ReceiptToken.address);
 };

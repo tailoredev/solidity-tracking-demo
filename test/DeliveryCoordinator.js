@@ -99,7 +99,7 @@ contract("DeliveryCoordinator", accounts => {
 
     assert.equal(deliveryCoordinatorInstance.address, await packageTokenInstance.ownerOf.call(packageTokenId), "The delivery coordinator does not own the recently transferred package token.");
 
-    await deliveryCoordinatorInstance.forwardPackage(deliveryNode.address, packageTokenId), { from: accounts[0] };
+    await deliveryCoordinatorInstance.forwardPackage(deliveryNode.address, packageTokenId, { from: accounts[0] });
 
     assert.equal(deliveryNode.address, await packageTokenInstance.ownerOf.call(packageTokenId), "The delivery node does not own the recently forwarded package token.");
   });

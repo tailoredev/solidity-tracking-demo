@@ -14,9 +14,9 @@ contract DeliveryCoordinator is ERC721Holder {
   DeliveryNode[] public deliveryNodes; // TODO - Use only one of the two delivery node properties
   mapping(address => bool) private knownDeliveryNodes;
 
-  constructor() {
-    packageToken = new PackageToken();
-    receiptToken = new ReceiptToken();
+  constructor(address packageTokenAddress, address receiptTokenAddress) {
+    packageToken = PackageToken(packageTokenAddress);
+    receiptToken = ReceiptToken(receiptTokenAddress);
   }
 
   function addDeliveryNode(string memory _nodeName) external {
