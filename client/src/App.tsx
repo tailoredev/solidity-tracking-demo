@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { AbiItem } from 'web3-utils';
 import Web3 from 'web3';
 import { Contract } from 'web3-eth-contract';
@@ -56,121 +56,133 @@ function App() {
     return address;
   }
 
-  async function refreshDeliveryNodes() {
-    if (!web3 || !deliveryCoordinatorInstance) {
-      return;
-    }
+  useEffect(() => {
+    const refreshDeliveryNodes = async () => {
+      if (!web3 || !deliveryCoordinatorInstance) {
+        return;
+      }
 
-    const deployedDeliveryNodeInstances = [];
+      const deployedDeliveryNodeInstances = [];
 
-    const numberOfDeliveryNodes = await deliveryCoordinatorInstance.methods
-      .numberOfDeliveryNodes().call();
+      const numberOfDeliveryNodes = await deliveryCoordinatorInstance.methods
+        .numberOfDeliveryNodes().call();
 
-    for (let idx = 0; idx < numberOfDeliveryNodes; idx += 1) {
-      const deliveryNodeAddress = await deliveryCoordinatorInstance.methods
-        .deliveryNodes(idx).call();
+      for (let idx = 0; idx < numberOfDeliveryNodes; idx += 1) {
+        const deliveryNodeAddress = await deliveryCoordinatorInstance.methods
+          .deliveryNodes(idx).call();
 
-      const deliveryNodeInstance = new web3.eth.Contract(
-        DeliveryNodeContract.abi as AbiItem[],
-        deliveryNodeAddress
-      );
-
-      const deliveryNodeName = await deliveryNodeInstance.methods.name().call();
-      const deliveryNodeStatusIndex = await deliveryNodeInstance.methods.status().call();
-      const deliveryNodeStatus = DeliveryNodeData.STATUS[deliveryNodeStatusIndex];
-
-      const deliveryNodeData = new DeliveryNodeData(
-        deliveryNodeName,
-        deliveryNodeStatus,
-        deliveryNodeAddress
-      );
-
-      deployedDeliveryNodeInstances.push(deliveryNodeData);
-    }
-
-    setDeliveryNodeInstances(deployedDeliveryNodeInstances);
-  }
-
-  async function refreshPackageTokens() {
-    if (!packageTokenInstance) {
-      return;
-    }
-
-    const ownedPackageTokensToSet = [];
-    let totalNumberOfPackageTokens = 0;
-
-    try {
-      totalNumberOfPackageTokens = await packageTokenInstance.methods
-        .totalSupply().call();
-    } catch (error) {
-      console.log('Error determining total package token balance', error);
-    }
-
-    if (totalNumberOfPackageTokens > 0) {
-      for (let idx = 0; idx < totalNumberOfPackageTokens; idx += 1) {
-        const packageTokenId = await packageTokenInstance.methods
-          .tokenByIndex(idx).call();
-
-        const tokenOwnerAddress = await packageTokenInstance.methods
-          .ownerOf(packageTokenId).call();
-
-        const packageInfo = await packageTokenInstance.methods
-          .packageData(packageTokenId).call();
-
-        const packageData = new PackageTokenData(
-          packageTokenId,
-          packageInfo.packageContents,
-          packageInfo.packageWeight,
-          tokenOwnerAddress,
-          getAddressName(tokenOwnerAddress)
+        const deliveryNodeInstance = new web3.eth.Contract(
+          DeliveryNodeContract.abi as AbiItem[],
+          deliveryNodeAddress
         );
 
-        ownedPackageTokensToSet.push(packageData);
-      }
-    }
+        const deliveryNodeName = await deliveryNodeInstance.methods.name().call();
+        const deliveryNodeStatusIndex = await deliveryNodeInstance.methods.status().call();
+        const deliveryNodeStatus = DeliveryNodeData.STATUS[deliveryNodeStatusIndex];
 
-    setOwnedPackageTokens(ownedPackageTokensToSet);
-  }
-
-  async function refreshReceiptTokens() {
-    if (!receiptTokenInstance) {
-      return;
-    }
-
-    const ownedReceiptTokensToSet = [];
-    let totalNumberOfReceiptTokens = 0;
-
-    try {
-      totalNumberOfReceiptTokens = await receiptTokenInstance.methods
-        .totalSupply().call();
-    } catch (error) {
-      console.log('Error determining total receipt token balance', error);
-    }
-
-    if (totalNumberOfReceiptTokens > 0) {
-      for (let idx = 0; idx < totalNumberOfReceiptTokens; idx += 1) {
-        const receiptTokenId = await receiptTokenInstance.methods
-          .tokenByIndex(idx).call();
-
-        const tokenOwnerAddress = await receiptTokenInstance.methods
-          .ownerOf(receiptTokenId).call();
-
-        const correspondingPackageTokenId = await receiptTokenInstance.methods
-          .receiptData(receiptTokenId).call();
-
-        const receiptData = new ReceiptTokenData(
-          receiptTokenId,
-          correspondingPackageTokenId,
-          tokenOwnerAddress,
-          getAddressName(tokenOwnerAddress)
+        const deliveryNodeData = new DeliveryNodeData(
+          deliveryNodeName,
+          deliveryNodeStatus,
+          deliveryNodeAddress
         );
 
-        ownedReceiptTokensToSet.push(receiptData);
+        deployedDeliveryNodeInstances.push(deliveryNodeData);
       }
-    }
 
-    setOwnedReceiptTokens(ownedReceiptTokensToSet);
-  }
+      setDeliveryNodeInstances(deployedDeliveryNodeInstances);
+    };
+
+    refreshDeliveryNodes();
+  }, [deliveryCoordinatorInstance]);
+
+  useEffect(() => {
+    const refreshPackageTokens = async () => {
+      if (!packageTokenInstance) {
+        return;
+      }
+
+      const ownedPackageTokensToSet = [];
+      let totalNumberOfPackageTokens = 0;
+
+      try {
+        totalNumberOfPackageTokens = await packageTokenInstance.methods
+          .totalSupply().call();
+      } catch (error) {
+        console.log('Error determining total package token balance', error);
+      }
+
+      if (totalNumberOfPackageTokens > 0) {
+        for (let idx = 0; idx < totalNumberOfPackageTokens; idx += 1) {
+          const packageTokenId = await packageTokenInstance.methods
+            .tokenByIndex(idx).call();
+
+          const tokenOwnerAddress = await packageTokenInstance.methods
+            .ownerOf(packageTokenId).call();
+
+          const packageInfo = await packageTokenInstance.methods
+            .packageData(packageTokenId).call();
+
+          const packageData = new PackageTokenData(
+            packageTokenId,
+            packageInfo.packageContents,
+            packageInfo.packageWeight,
+            tokenOwnerAddress,
+            getAddressName(tokenOwnerAddress)
+          );
+
+          ownedPackageTokensToSet.push(packageData);
+        }
+      }
+
+      setOwnedPackageTokens(ownedPackageTokensToSet);
+    };
+
+    refreshPackageTokens();
+  }, [packageTokenInstance]);
+
+  useEffect(() => {
+    const refreshReceiptTokens = async () => {
+      if (!receiptTokenInstance) {
+        return;
+      }
+
+      const ownedReceiptTokensToSet = [];
+      let totalNumberOfReceiptTokens = 0;
+
+      try {
+        totalNumberOfReceiptTokens = await receiptTokenInstance.methods
+          .totalSupply().call();
+      } catch (error) {
+        console.log('Error determining total receipt token balance', error);
+      }
+
+      if (totalNumberOfReceiptTokens > 0) {
+        for (let idx = 0; idx < totalNumberOfReceiptTokens; idx += 1) {
+          const receiptTokenId = await receiptTokenInstance.methods
+            .tokenByIndex(idx).call();
+
+          const tokenOwnerAddress = await receiptTokenInstance.methods
+            .ownerOf(receiptTokenId).call();
+
+          const correspondingPackageTokenId = await receiptTokenInstance.methods
+            .receiptData(receiptTokenId).call();
+
+          const receiptData = new ReceiptTokenData(
+            receiptTokenId,
+            correspondingPackageTokenId,
+            tokenOwnerAddress,
+            getAddressName(tokenOwnerAddress)
+          );
+
+          ownedReceiptTokensToSet.push(receiptData);
+        }
+      }
+
+      setOwnedReceiptTokens(ownedReceiptTokensToSet);
+    };
+
+    refreshReceiptTokens();
+  }, [receiptTokenInstance]);
 
   async function connectWallet() {
     try {
@@ -208,9 +220,9 @@ function App() {
       setPackageTokenInstance(deployedPackageTokenInstance);
       setReceiptTokenInstance(deployedReceiptTokenInstance);
 
-      await refreshDeliveryNodes();
-      await refreshPackageTokens();
-      await refreshReceiptTokens();
+      // await refreshDeliveryNodes();
+      // await refreshPackageTokens();
+      // await refreshReceiptTokens();
     } catch (error) {
       // Catch any errors for any of the above operations.
       alert(
@@ -229,7 +241,7 @@ function App() {
       .addDeliveryNode(deliveryNodeNameRef.current.value)
       .send({ from: accounts[0] });
 
-    await refreshDeliveryNodes();
+    // await refreshDeliveryNodes();
 
     deliveryNodeNameRef.current.value = '';
   }
@@ -244,7 +256,7 @@ function App() {
       packageWeightRef.current.value
     ).send({ from: accounts[0] });
 
-    await refreshPackageTokens();
+    // await refreshPackageTokens();
 
     packageContentsRef.current.value = '';
     packageWeightRef.current.value = '';
@@ -292,8 +304,8 @@ function App() {
           ).send({ from: accounts[0] });
         }
 
-        await refreshPackageTokens();
-        await refreshReceiptTokens();
+        // await refreshPackageTokens();
+        // await refreshReceiptTokens();
       }
     }
   }
@@ -311,8 +323,8 @@ function App() {
           receiptTokenId
         ).send({ from: accounts[0] });
 
-      await refreshPackageTokens();
-      await refreshReceiptTokens();
+      // await refreshPackageTokens();
+      // await refreshReceiptTokens();
     }
   }
 
