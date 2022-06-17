@@ -28,6 +28,9 @@ function App() {
     setOwnedPackageTokens] = useState<PackageTokenData[] | undefined>(undefined);
   const [ownedReceiptTokens,
     setOwnedReceiptTokens] = useState<ReceiptTokenData[] | undefined>(undefined);
+  const [deliveryContractInteractions, setDeliveryContractInteractions] = useState<number>(0);
+  const [packageContractInteractions, setPackageContractInteractions] = useState<number>(0);
+  const [receiptContractInteractions, setReceiptContractInteractions] = useState<number>(0);
 
   const deliveryNodeNameRef = useRef<HTMLInputElement>(null);
   const packageContentsRef = useRef<HTMLInputElement>(null);
@@ -93,7 +96,7 @@ function App() {
     };
 
     refreshDeliveryNodes();
-  }, [deliveryCoordinatorInstance]);
+  }, [deliveryCoordinatorInstance, deliveryContractInteractions]);
 
   useEffect(() => {
     const refreshPackageTokens = async () => {
@@ -138,7 +141,9 @@ function App() {
     };
 
     refreshPackageTokens();
-  }, [packageTokenInstance]);
+  // TODO - Confirm we want to refresh the packages every time the nodes are updated
+  // this does solve the initial loading bug
+  }, [packageTokenInstance, packageContractInteractions, deliveryNodeInstances]);
 
   useEffect(() => {
     const refreshReceiptTokens = async () => {
@@ -182,7 +187,7 @@ function App() {
     };
 
     refreshReceiptTokens();
-  }, [receiptTokenInstance]);
+  }, [receiptTokenInstance, receiptContractInteractions]);
 
   async function connectWallet() {
     try {
@@ -219,10 +224,6 @@ function App() {
       setDeliveryCoordinatorInstance(deployedDeliveryCoordinatorInstance);
       setPackageTokenInstance(deployedPackageTokenInstance);
       setReceiptTokenInstance(deployedReceiptTokenInstance);
-
-      // await refreshDeliveryNodes();
-      // await refreshPackageTokens();
-      // await refreshReceiptTokens();
     } catch (error) {
       // Catch any errors for any of the above operations.
       alert(
@@ -241,7 +242,7 @@ function App() {
       .addDeliveryNode(deliveryNodeNameRef.current.value)
       .send({ from: accounts[0] });
 
-    // await refreshDeliveryNodes();
+    setDeliveryContractInteractions(deliveryContractInteractions + 1);
 
     deliveryNodeNameRef.current.value = '';
   }
@@ -256,7 +257,7 @@ function App() {
       packageWeightRef.current.value
     ).send({ from: accounts[0] });
 
-    // await refreshPackageTokens();
+    setPackageContractInteractions(packageContractInteractions + 1);
 
     packageContentsRef.current.value = '';
     packageWeightRef.current.value = '';
@@ -304,8 +305,8 @@ function App() {
           ).send({ from: accounts[0] });
         }
 
-        // await refreshPackageTokens();
-        // await refreshReceiptTokens();
+        setPackageContractInteractions(packageContractInteractions + 1);
+        setReceiptContractInteractions(receiptContractInteractions + 1);
       }
     }
   }
@@ -323,8 +324,8 @@ function App() {
           receiptTokenId
         ).send({ from: accounts[0] });
 
-      // await refreshPackageTokens();
-      // await refreshReceiptTokens();
+        setPackageContractInteractions(packageContractInteractions + 1);
+        setReceiptContractInteractions(receiptContractInteractions + 1);
     }
   }
 
