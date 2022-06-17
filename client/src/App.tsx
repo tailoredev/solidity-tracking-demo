@@ -1,6 +1,7 @@
-import React, { Component } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { AbiItem } from 'web3-utils';
 import Web3 from 'web3';
+import { Contract } from 'web3-eth-contract';
 import { ContractObject } from '@truffle/contract-schema';
 import DeliveryCoordinatorContract from './contracts/DeliveryCoordinator.json';
 import DeliveryNodeContract from './contracts/DeliveryNode.json';
@@ -15,59 +16,214 @@ import ReceiptTokenData from './model/ReceiptTokenData';
 import DeliveryNodeData from './model/DeliveryNodeData';
 
 // TODO - Split this component up into smaller, logical components
-class App extends Component {
-  newDeliveryNodeName = '';
-  newPackageContents = '';
-  newPackageWeight = '';
-  destinationAddress = '';
+function App() {
+  const [web3, setWeb3] = useState<Web3 | undefined>(undefined);
+  const [accounts, setAccounts] = useState<string[]>([]);
+  const [deliveryCoordinatorInstance,
+    setDeliveryCoordinatorInstance] = useState<Contract | undefined>(undefined);
+  const [packageTokenInstance, setPackageTokenInstance] = useState<Contract | undefined>(undefined);
+  const [receiptTokenInstance, setReceiptTokenInstance] = useState<Contract | undefined>(undefined);
+  const [deliveryNodeInstances, setDeliveryNodeInstances] = useState<DeliveryNodeData[]>([]);
+  const [ownedPackageTokens,
+    setOwnedPackageTokens] = useState<PackageTokenData[] | undefined>(undefined);
+  const [ownedReceiptTokens,
+    setOwnedReceiptTokens] = useState<ReceiptTokenData[] | undefined>(undefined);
+  const [deliveryContractInteractions, setDeliveryContractInteractions] = useState<number>(0);
+  const [packageContractInteractions, setPackageContractInteractions] = useState<number>(0);
+  const [receiptContractInteractions, setReceiptContractInteractions] = useState<number>(0);
 
-  constructor(props: any) {
-    super(props);
+  const deliveryNodeNameRef = useRef<HTMLInputElement>(null);
+  const packageContentsRef = useRef<HTMLInputElement>(null);
+  const packageWeightRef = useRef<HTMLInputElement>(null);
+  const destinationAddressRef = useRef<HTMLInputElement>(null);
 
-    this.state = {};
+  function getAddressName(address: string): string {
+    if (accounts[0] === address) {
+      return 'You!';
+    }
+
+    if (deliveryCoordinatorInstance && deliveryCoordinatorInstance.options.address === address) {
+      return 'Delivery Coordinator';
+    }
+
+    if (deliveryNodeInstances && deliveryNodeInstances.length > 0) {
+      const matchingNodeInstance = deliveryNodeInstances.find(
+        (deliveryNodeInstance: DeliveryNodeData) => deliveryNodeInstance.nodeAddress === address
+      );
+
+      if (matchingNodeInstance && matchingNodeInstance.nodeName) {
+        return matchingNodeInstance.nodeName;
+      }
+    }
+
+    return address;
   }
 
-  async connectWallet() {
+  useEffect(() => {
+    const refreshDeliveryNodes = async () => {
+      if (!web3 || !deliveryCoordinatorInstance) {
+        return;
+      }
+
+      const deployedDeliveryNodeInstances = [];
+
+      const numberOfDeliveryNodes = await deliveryCoordinatorInstance.methods
+        .numberOfDeliveryNodes().call();
+
+      for (let idx = 0; idx < numberOfDeliveryNodes; idx += 1) {
+        const deliveryNodeAddress = await deliveryCoordinatorInstance.methods
+          .deliveryNodes(idx).call();
+
+        const deliveryNodeInstance = new web3.eth.Contract(
+          DeliveryNodeContract.abi as AbiItem[],
+          deliveryNodeAddress
+        );
+
+        const deliveryNodeName = await deliveryNodeInstance.methods.name().call();
+        const deliveryNodeStatusIndex = await deliveryNodeInstance.methods.status().call();
+        const deliveryNodeStatus = DeliveryNodeData.STATUS[deliveryNodeStatusIndex];
+
+        const deliveryNodeData = new DeliveryNodeData(
+          deliveryNodeName,
+          deliveryNodeStatus,
+          deliveryNodeAddress
+        );
+
+        deployedDeliveryNodeInstances.push(deliveryNodeData);
+      }
+
+      setDeliveryNodeInstances(deployedDeliveryNodeInstances);
+    };
+
+    refreshDeliveryNodes();
+  }, [deliveryCoordinatorInstance, deliveryContractInteractions]);
+
+  useEffect(() => {
+    const refreshPackageTokens = async () => {
+      if (!packageTokenInstance) {
+        return;
+      }
+
+      const ownedPackageTokensToSet = [];
+      let totalNumberOfPackageTokens = 0;
+
+      try {
+        totalNumberOfPackageTokens = await packageTokenInstance.methods
+          .totalSupply().call();
+      } catch (error) {
+        console.log('Error determining total package token balance', error);
+      }
+
+      if (totalNumberOfPackageTokens > 0) {
+        for (let idx = 0; idx < totalNumberOfPackageTokens; idx += 1) {
+          const packageTokenId = await packageTokenInstance.methods
+            .tokenByIndex(idx).call();
+
+          const tokenOwnerAddress = await packageTokenInstance.methods
+            .ownerOf(packageTokenId).call();
+
+          const packageInfo = await packageTokenInstance.methods
+            .packageData(packageTokenId).call();
+
+          const packageData = new PackageTokenData(
+            packageTokenId,
+            packageInfo.packageContents,
+            packageInfo.packageWeight,
+            tokenOwnerAddress,
+            getAddressName(tokenOwnerAddress)
+          );
+
+          ownedPackageTokensToSet.push(packageData);
+        }
+      }
+
+      setOwnedPackageTokens(ownedPackageTokensToSet);
+    };
+
+    refreshPackageTokens();
+  // TODO - Confirm we want to refresh the packages every time the nodes are updated
+  // this does solve the initial loading bug
+  }, [packageTokenInstance, packageContractInteractions, deliveryNodeInstances]);
+
+  useEffect(() => {
+    const refreshReceiptTokens = async () => {
+      if (!receiptTokenInstance) {
+        return;
+      }
+
+      const ownedReceiptTokensToSet = [];
+      let totalNumberOfReceiptTokens = 0;
+
+      try {
+        totalNumberOfReceiptTokens = await receiptTokenInstance.methods
+          .totalSupply().call();
+      } catch (error) {
+        console.log('Error determining total receipt token balance', error);
+      }
+
+      if (totalNumberOfReceiptTokens > 0) {
+        for (let idx = 0; idx < totalNumberOfReceiptTokens; idx += 1) {
+          const receiptTokenId = await receiptTokenInstance.methods
+            .tokenByIndex(idx).call();
+
+          const tokenOwnerAddress = await receiptTokenInstance.methods
+            .ownerOf(receiptTokenId).call();
+
+          const correspondingPackageTokenId = await receiptTokenInstance.methods
+            .receiptData(receiptTokenId).call();
+
+          const receiptData = new ReceiptTokenData(
+            receiptTokenId,
+            correspondingPackageTokenId,
+            tokenOwnerAddress,
+            getAddressName(tokenOwnerAddress)
+          );
+
+          ownedReceiptTokensToSet.push(receiptData);
+        }
+      }
+
+      setOwnedReceiptTokens(ownedReceiptTokensToSet);
+    };
+
+    refreshReceiptTokens();
+  }, [receiptTokenInstance, receiptContractInteractions]);
+
+  async function connectWallet() {
     try {
       // Get network provider and web3 instance.
-      const web3 = await getWeb3() as Web3;
+      const web3Instance = await getWeb3() as Web3;
 
       // Use web3 to get the user's accounts.
-      const accounts = await web3.eth.getAccounts();
+      const web3Accounts = await web3Instance.eth.getAccounts();
       // web3.eth.defaultAccount = accounts[0];
 
       // Get the contract instance.
-      const networkId = (await web3.eth.net.getId()).toString();
+      const networkId = (await web3Instance.eth.net.getId()).toString();
       const deliveryCoordinatorContract = (DeliveryCoordinatorContract as ContractObject);
       const deployedNetwork = deliveryCoordinatorContract.networks
         ? deliveryCoordinatorContract.networks[networkId] : undefined;
 
-      const deliveryCoordinatorInstance = new web3.eth.Contract(
+      const deployedDeliveryCoordinatorInstance = new web3Instance.eth.Contract(
         DeliveryCoordinatorContract.abi as AbiItem[],
         deployedNetwork && deployedNetwork.address
       );
 
-      const packageTokenInstance = new web3.eth.Contract(
+      const deployedPackageTokenInstance = new web3Instance.eth.Contract(
         PackageTokenContract.abi as AbiItem[],
-        await deliveryCoordinatorInstance.methods.packageToken().call()
+        await deployedDeliveryCoordinatorInstance.methods.packageToken().call()
       );
 
-      const receiptTokenInstance = new web3.eth.Contract(
+      const deployedReceiptTokenInstance = new web3Instance.eth.Contract(
         ReceiptTokenContract.abi as AbiItem[],
-        await deliveryCoordinatorInstance.methods.receiptToken().call()
+        await deployedDeliveryCoordinatorInstance.methods.receiptToken().call()
       );
 
-      this.setState({
-        web3,
-        accounts,
-        deliveryCoordinatorInstance,
-        packageTokenInstance,
-        receiptTokenInstance
-      });
-
-      await this.refreshDeliveryNodes();
-      await this.refreshPackageTokens();
-      await this.refreshReceiptTokens();
+      setWeb3(web3Instance);
+      setAccounts(web3Accounts);
+      setDeliveryCoordinatorInstance(deployedDeliveryCoordinatorInstance);
+      setPackageTokenInstance(deployedPackageTokenInstance);
+      setReceiptTokenInstance(deployedReceiptTokenInstance);
     } catch (error) {
       // Catch any errors for any of the above operations.
       alert(
@@ -77,355 +233,197 @@ class App extends Component {
     }
   }
 
-  async addDeliveryNode() {
-    const {
-      accounts,
-      deliveryCoordinatorInstance: deployedDeliveryCoordinatorContract
-    } = this.state as any;
+  async function addDeliveryNode() {
+    if (!deliveryCoordinatorInstance || !deliveryNodeNameRef.current) {
+      return;
+    }
 
-    await deployedDeliveryCoordinatorContract.methods.addDeliveryNode(this.newDeliveryNodeName)
+    await deliveryCoordinatorInstance.methods
+      .addDeliveryNode(deliveryNodeNameRef.current.value)
       .send({ from: accounts[0] });
 
-    await this.refreshDeliveryNodes();
+    setDeliveryContractInteractions(deliveryContractInteractions + 1);
+
+    deliveryNodeNameRef.current.value = '';
   }
 
-  async createPackage() {
-    const {
-      accounts,
-      deliveryCoordinatorInstance: deployedDeliveryCoordinatorContract
-    } = this.state as any;
+  async function createPackage() {
+    if (!deliveryCoordinatorInstance || !packageContentsRef.current || !packageWeightRef.current) {
+      return;
+    }
 
-    await deployedDeliveryCoordinatorContract.methods
-      .createPackage(this.newPackageContents, this.newPackageWeight).send({ from: accounts[0] });
+    await deliveryCoordinatorInstance.methods.createPackage(
+      packageContentsRef.current.value,
+      packageWeightRef.current.value
+    ).send({ from: accounts[0] });
 
-    await this.refreshPackageTokens();
+    setPackageContractInteractions(packageContractInteractions + 1);
+
+    packageContentsRef.current.value = '';
+    packageWeightRef.current.value = '';
   }
 
-  async sendPackageToken(packageTokenId: number | undefined) {
-    const {
-      accounts,
-      deliveryCoordinatorInstance: deployedDeliveryCoordinatorContract,
-      packageTokenInstance: deployedPackageTokenContract,
-      deliveryNodeInstances
-    } = this.state as any;
+  async function sendPackageToken(packageTokenId: number | undefined) {
+    if (!packageTokenInstance || !deliveryCoordinatorInstance) {
+      return;
+    }
 
     if (packageTokenId) {
-      const currentPackageOwner = await deployedPackageTokenContract.methods
+      const currentPackageOwner = await packageTokenInstance.methods
         .ownerOf(packageTokenId).call();
 
       // Ensure this is a known address
-      if (this.getAddressName(currentPackageOwner) !== currentPackageOwner) {
+      if (getAddressName(currentPackageOwner) !== currentPackageOwner) {
         if (currentPackageOwner === accounts[0]) {
-          if (Web3.utils.isAddress(this.destinationAddress)) {
-            await deployedPackageTokenContract.methods['safeTransferFrom(address,address,uint256,bytes)'](
+          const destinationAddress = destinationAddressRef.current ? destinationAddressRef.current.value : '';
+          if (Web3.utils.isAddress(destinationAddress)) {
+            await packageTokenInstance.methods['safeTransferFrom(address,address,uint256,bytes)'](
               accounts[0],
-              deployedDeliveryCoordinatorContract.options.address,
+              deliveryCoordinatorInstance.options.address,
               packageTokenId,
-              Web3.utils.hexToBytes(this.destinationAddress)
-            ).send({ from: accounts[0] });  
+              Web3.utils.hexToBytes(destinationAddress)
+            ).send({ from: accounts[0] });
           } else {
-            await deployedPackageTokenContract.methods.safeTransferFrom(
+            await packageTokenInstance.methods.safeTransferFrom(
               accounts[0],
-              deployedDeliveryCoordinatorContract.options.address,
+              deliveryCoordinatorInstance.options.address,
               packageTokenId
             ).send({ from: accounts[0] });
+          }
+
+          if (destinationAddressRef.current) {
+            destinationAddressRef.current.value = '';
           }
         } else { // The token is owned by either the delivery coordinator or a delivery node
           // TODO - This should rather be user selectable via a filtered drop down
           const randomDeliveryNodeIndex = Math.floor(Math.random() * deliveryNodeInstances.length);
           const destinationNode = deliveryNodeInstances[randomDeliveryNodeIndex];
 
-          await deployedDeliveryCoordinatorContract.methods.forwardPackage(
+          await deliveryCoordinatorInstance.methods.forwardPackage(
             destinationNode.nodeAddress,
             packageTokenId
           ).send({ from: accounts[0] });
         }
 
-        await this.refreshPackageTokens();
-        await this.refreshReceiptTokens();
+        setPackageContractInteractions(packageContractInteractions + 1);
+        setReceiptContractInteractions(receiptContractInteractions + 1);
       }
     }
   }
 
-  async redeemReceiptToken(receiptTokenId: number | undefined) {
-    const {
-      accounts,
-      deliveryCoordinatorInstance: deployedDeliveryCoordinatorContract,
-      receiptTokenInstance: deployedReceiptTokenContract,
-    } = this.state as any;
+  async function redeemReceiptToken(receiptTokenId: number | undefined) {
+    if (!receiptTokenInstance || !deliveryCoordinatorInstance) {
+      return;
+    }
 
     if (receiptTokenId) {
-      await deployedReceiptTokenContract.methods
+      await receiptTokenInstance.methods
         .safeTransferFrom(
           accounts[0],
-          deployedDeliveryCoordinatorContract.options.address,
+          deliveryCoordinatorInstance.options.address,
           receiptTokenId
         ).send({ from: accounts[0] });
 
-      await this.refreshPackageTokens();
-      await this.refreshReceiptTokens();
+        setPackageContractInteractions(packageContractInteractions + 1);
+        setReceiptContractInteractions(receiptContractInteractions + 1);
     }
   }
 
-  private async refreshDeliveryNodes() {
-    const {
-      web3,
-      deliveryCoordinatorInstance: deployedDeliveryCoordinatorContract
-    } = this.state as any;
-
-    const deliveryNodeInstances = [];
-
-    const numberOfDeliveryNodes = await deployedDeliveryCoordinatorContract.methods
-      .numberOfDeliveryNodes().call();
-
-    for (let idx = 0; idx < numberOfDeliveryNodes; idx += 1) {
-      const deliveryNodeAddress = await deployedDeliveryCoordinatorContract.methods
-        .deliveryNodes(idx).call();
-
-      const deliveryNodeInstance = new web3.eth.Contract(
-        DeliveryNodeContract.abi,
-        deliveryNodeAddress
-      );
-
-      const deliveryNodeName = await deliveryNodeInstance.methods.name().call();
-      const deliveryNodeStatusIndex = await deliveryNodeInstance.methods.status().call();
-      const deliveryNodeStatus = DeliveryNodeData.STATUS[deliveryNodeStatusIndex];
-
-      const deliveryNodeData = new DeliveryNodeData(
-        deliveryNodeName,
-        deliveryNodeStatus,
-        deliveryNodeAddress
-      );
-
-      deliveryNodeInstances.push(deliveryNodeData);
-    }
-
-    this.setState({
-      deliveryNodeInstances
-    });
-  }
-
-  private async refreshPackageTokens() {
-    const {
-      packageTokenInstance: deployedPackageTokenContract
-    } = this.state as any;
-
-    const ownedPackageTokens = [];
-    let totalNumberOfPackageTokens = 0;
-
-    try {
-      totalNumberOfPackageTokens = await deployedPackageTokenContract.methods
-        .totalSupply().call();
-    } catch (error) {
-      console.log('Error determining total package token balance', error);
-    }
-
-    if (totalNumberOfPackageTokens > 0) {
-      for (let idx = 0; idx < totalNumberOfPackageTokens; idx += 1) {
-        const packageTokenId = await deployedPackageTokenContract.methods
-          .tokenByIndex(idx).call();
-
-        const tokenOwnerAddress = await deployedPackageTokenContract.methods
-          .ownerOf(packageTokenId).call();
-
-        const packageInfo = await deployedPackageTokenContract.methods
-          .packageData(packageTokenId).call();
-
-        const packageData = new PackageTokenData(
-          packageTokenId,
-          packageInfo.packageContents,
-          packageInfo.packageWeight,
-          tokenOwnerAddress,
-          this.getAddressName(tokenOwnerAddress)
-        );
-
-        ownedPackageTokens.push(packageData);
-      }
-    }
-
-    this.setState({
-      ownedPackageTokens
-    });
-  }
-
-  private async refreshReceiptTokens() {
-    const {
-      accounts,
-      receiptTokenInstance: deployedReceiptTokenContract
-    } = this.state as any;
-
-    const ownedReceiptTokens = [];
-    let totalNumberOfReceiptTokens = 0;
-
-    try {
-      totalNumberOfReceiptTokens = await deployedReceiptTokenContract.methods
-        .totalSupply().call();
-    } catch (error) {
-      console.log('Error determining total receipt token balance', error);
-    }
-
-    if (totalNumberOfReceiptTokens > 0) {
-      for (let idx = 0; idx < totalNumberOfReceiptTokens; idx += 1) {
-        const receiptTokenId = await deployedReceiptTokenContract.methods
-          .tokenByIndex(idx).call();
-
-        const tokenOwnerAddress = await deployedReceiptTokenContract.methods
-          .ownerOf(receiptTokenId).call();
-        
-        const correspondingPackageTokenId = await deployedReceiptTokenContract.methods
-          .receiptData(receiptTokenId).call();
-
-        const receiptData = new ReceiptTokenData(
-          receiptTokenId,
-          correspondingPackageTokenId,
-          tokenOwnerAddress,
-          this.getAddressName(tokenOwnerAddress)
-        );
-
-        ownedReceiptTokens.push(receiptData);
-      }
-    }
-
-    this.setState({
-      ownedReceiptTokens
-    });
-  }
-
-  private getAddressName(address: string): string {
-    const {
-      accounts,
-      deliveryCoordinatorInstance: deployedDeliveryCoordinatorContract,
-      deliveryNodeInstances
-    } = this.state as any;
-
-    if (accounts[0] === address) {
-      return 'You!';
-    }
-
-    if (deployedDeliveryCoordinatorContract.options.address === address) {
-      return 'Delivery Coordinator';
-    }
-
-    if (deliveryNodeInstances && deliveryNodeInstances.length > 0) {
-      const matchingNodeInstance = deliveryNodeInstances.find(
-        (deliveryNodeInstance: DeliveryNodeData) => deliveryNodeInstance.nodeAddress === address
-      );
-
-      if (matchingNodeInstance) {
-        return matchingNodeInstance.nodeName;
-      }
-    }
-
-    return address;
-  }
-
-  render() {
-    const {
-      web3,
-      deliveryCoordinatorInstance,
-      packageTokenInstance,
-      receiptTokenInstance,
-      deliveryNodeInstances,
-      ownedPackageTokens,
-      ownedReceiptTokens
-    } = this.state as any;
-
-    if (!web3) {
-      return (
-        <div className="app">
-          <br />
-          <button type="button" className="btn btn-light text-dark" onClick={() => this.connectWallet()}>Connect wallet</button>
-        </div>
-      );
-    }
-
+  if (!web3) {
     return (
       <div className="app">
         <br />
-        <h1>Blockchain Package Tracking Demo</h1>
-        <br />
-        <div>
-          The delivery coordinator contract is deployed at:
-          {` ${deliveryCoordinatorInstance.options.address}`}
-        </div>
-        <div>
-          The package token contract is deployed at:
-          {` ${packageTokenInstance.options.address}`}
-        </div>
-        <div>
-          The receipt token contract is deployed at:
-          {` ${receiptTokenInstance.options.address}`}
-        </div>
-        <br />
-        <h2>Nodes Available</h2>
-        <div>
-          {deliveryNodeInstances
-          && deliveryNodeInstances.map((deliveryNodeData: DeliveryNodeData, idx: number) => (
-            <li key={idx}>
-              {` ${deliveryNodeData.nodeName} - ${deliveryNodeData.nodeStatus} - ${deliveryNodeData.nodeAddress}`}
-            </li>
-          ))}
-        </div>
-        <h2>Add Node</h2>
-        <br />
-        <input
-          type="text"
-          placeholder="Enter node name"
-          onChange={(event) => { this.newDeliveryNodeName = event.target.value; }}
-        />
-        <br />
-        <br />
-        <button type="button" className="btn btn-light text-dark" onClick={() => this.addDeliveryNode()}>Add node</button>
-        <br />
-        <h2>Create Package</h2>
-        <br />
-        <input
-          type="text"
-          placeholder="Package contents"
-          onChange={(event) => { this.newPackageContents = event.target.value; }}
-        />
-        <br />
-        <input
-          type="text"
-          placeholder="Package weight"
-          onChange={(event) => { this.newPackageWeight = event.target.value; }}
-        />
-        <br />
-        <button type="button" className="btn btn-light text-dark" onClick={() => this.createPackage()}>Create package</button>
-        <br />
-        <h2>Current Packages</h2>
-        <div>
-          {ownedPackageTokens
-          && ownedPackageTokens.map((packageTokenData: PackageTokenData, idx: number) => (
-            <>
-              <li key={idx}>
-                {`Token ID: ${packageTokenData.tokenId} - ${packageTokenData.packageContents} - ${packageTokenData.packageWeight} - Owner: ${packageTokenData.owner}`}
-              </li>
-              <button type="button" className="btn btn-light text-dark" onClick={() => this.sendPackageToken(packageTokenData.tokenId)}>Send package</button>
-            </>
-          ))}
-        </div>
-        <br />
-        <input
-          type="text"
-          placeholder="Destination address"
-          onChange={(event) => { this.destinationAddress = event.target.value; }}
-        />
-        <h2>Current Receipts</h2>
-        <div>
-          {ownedReceiptTokens
-          && ownedReceiptTokens.map((receiptTokenData: ReceiptTokenData, idx: number) => (
-            <>
-              <li key={idx}>
-                {`Token ID: ${receiptTokenData.tokenId} - Corresponding Package Token ID: ${receiptTokenData.correspondingPackageTokenId} - Owner: ${receiptTokenData.owner}`}
-              </li>
-              <button type="button" className="btn btn-light text-dark" onClick={() => this.redeemReceiptToken(receiptTokenData.tokenId)}>Redeem</button>
-            </>
-          ))}
-        </div>
+        <button type="button" className="btn btn-light text-dark" onClick={() => connectWallet()}>Connect wallet</button>
       </div>
     );
   }
+
+  return (
+    <div className="app">
+      <br />
+      <h1>Blockchain Package Tracking Demo</h1>
+      <br />
+      <div>
+        The delivery coordinator contract is deployed at:
+        {` ${deliveryCoordinatorInstance ? deliveryCoordinatorInstance.options.address : 'No delivery coordinator instance was found'}`}
+      </div>
+      <div>
+        The package token contract is deployed at:
+        {` ${packageTokenInstance ? packageTokenInstance.options.address : 'No package token instance was found'}`}
+      </div>
+      <div>
+        The receipt token contract is deployed at:
+        {` ${receiptTokenInstance ? receiptTokenInstance.options.address : 'No receipt token instance was found'}`}
+      </div>
+      <br />
+      <h2>Nodes Available</h2>
+      <div>
+        {deliveryNodeInstances
+        && deliveryNodeInstances.map((deliveryNodeData: DeliveryNodeData) => (
+          <li key={deliveryNodeData.nodeAddress}>
+            {` ${deliveryNodeData.nodeName} - ${deliveryNodeData.nodeStatus} - ${deliveryNodeData.nodeAddress}`}
+          </li>
+        ))}
+      </div>
+      <h2>Add Node</h2>
+      <br />
+      <input
+        type="text"
+        placeholder="Enter node name"
+        ref={deliveryNodeNameRef}
+      />
+      <br />
+      <br />
+      <button type="button" className="btn btn-light text-dark" onClick={() => addDeliveryNode()}>Add node</button>
+      <br />
+      <h2>Create Package</h2>
+      <br />
+      <input
+        type="text"
+        placeholder="Package contents"
+        ref={packageContentsRef}
+      />
+      <br />
+      <input
+        type="text"
+        placeholder="Package weight"
+        ref={packageWeightRef}
+      />
+      <br />
+      <button type="button" className="btn btn-light text-dark" onClick={() => createPackage()}>Create package</button>
+      <br />
+      <h2>Current Packages</h2>
+      <div>
+        {ownedPackageTokens
+        && ownedPackageTokens.map((packageTokenData: PackageTokenData) => (
+          <>
+            <li key={packageTokenData.tokenId}>
+              {`Token ID: ${packageTokenData.tokenId} - ${packageTokenData.packageContents} - ${packageTokenData.packageWeight} - Owner: ${packageTokenData.owner}`}
+            </li>
+            <button type="button" className="btn btn-light text-dark" onClick={() => sendPackageToken(packageTokenData.tokenId)}>Send package</button>
+          </>
+        ))}
+      </div>
+      <br />
+      <input
+        type="text"
+        placeholder="Destination address"
+        ref={destinationAddressRef}
+      />
+      <h2>Current Receipts</h2>
+      <div>
+        {ownedReceiptTokens
+        && ownedReceiptTokens.map((receiptTokenData: ReceiptTokenData) => (
+          <>
+            <li key={receiptTokenData.tokenId}>
+              {`Token ID: ${receiptTokenData.tokenId} - Corresponding Package Token ID: ${receiptTokenData.correspondingPackageTokenId} - Owner: ${receiptTokenData.owner}`}
+            </li>
+            <button type="button" className="btn btn-light text-dark" onClick={() => redeemReceiptToken(receiptTokenData.tokenId)}>Redeem</button>
+          </>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 export default App;
